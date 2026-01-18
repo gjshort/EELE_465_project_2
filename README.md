@@ -1,6 +1,6 @@
 # EELE 465 Project 2
 
-In this project, you'll bit-bang i2c and communicate with a real-time clock.
+In this project, you'll bit bang the i2c protocol to communicate with the Analog Discovery 2 and a real-time clock.
 
 ## Repository organization
 

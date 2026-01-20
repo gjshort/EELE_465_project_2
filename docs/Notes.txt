@@ -1,0 +1,24 @@
+SCL: P3.2
+SDA: P3.0
+
+START:
+- Send SDA low
+- Delay minimum 4 us (start hold)
+- Send SCL low
+- Wait ~4 us (Not req'd)
+
+SEND Address:
+- Set A6 on SDA
+- Delay minimum 250 ns (data setup) 
+- Send SCL high
+- Delay minimum 5 us (clock hold)
+- Send SCL low
+- Delay minimum 5 us (data hold)
+- ... A5, A4, A3, A2, A1, A0, R/W ...
+- Set SDA port to input
+- Delay minimum 250 ns (ACK setup)
+- Send SCL high
+- Delay minimum 5 us (clock hold)
+- Send SCL low
+
+

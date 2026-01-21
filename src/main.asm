@@ -50,16 +50,16 @@ init:
             ; SCL here will be listening until it takes over
             bic.b #BIT2, &P3SEL0    ; Set to Digital I/O
             bic.b #BIT2, &P3SEL1    ; "...""
-            bis.b #BIT2, &P3DIR     ; Set dir to input
-            ;bis.b #BIT2, &P3REN     ; Enable resistor
+            bic.b #BIT2, &P3DIR     ; Set dir to input
+            bis.b #BIT2, &P3REN     ; Enable resistor
             bis.b #BIT2, &P3OUT     ; Pull-up
 
             ; -- P3.0 (I2C SDA) --
             ; SDA here will be listening until it takes over
             bic.b #BIT0, &P3SEL0    ; Set to Digital I/O
             bic.b #BIT0, &P3SEL1    ; "..."
-            bis.b #BIT0, &P3DIR     ; Set dir to input
-            ;bis.b #BIT0, &P3REN     ; Enable resistor
+            bic.b #BIT0, &P3DIR     ; Set dir to input
+            bis.b #BIT0, &P3REN     ; Enable resistor
             bis.b #BIT0, &P3OUT     ; Pull-up
 
             ; -- Final Init --

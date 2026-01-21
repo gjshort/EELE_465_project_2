@@ -30,7 +30,6 @@ init:
             ; -- P1.0 (LED1 Heartbeat) --
             bic.b #BIT0, &P1SEL0    ; Set to Digital I/O
             bic.b #BIT0, &P1SEL1    ; "..."
-
             bis.b #BIT0, &P1DIR     ; Set dir to out
             bic.b #BIT0, &P1OUT     ; Clear output
 
@@ -41,21 +40,38 @@ init:
             bis.w #TBSSEL__SMCLK, &TB0CTL	; 1 MHz ref clock
             bis.w #MC__UP, &TB0CTL			; Up mode
             bis.w #CNTL_0, &TB0CTL			; 16 bit counter
-
             bis.w #ID__4, &TB0CTL			; Divide by 4
             bis.w #TBIDEX__5, &TB0EX0		; Dicide by 5
             bis.w #25000d, &TB0CCR0	   ; Set compare value
-
             bic.w #CCIFG, &TB0CCTL0			; Clear interrupt flag
 	        bis.w #CCIE, &TB0CCTL0			; Enable interrupt
 
-            ; Stop the watchdog timer
-            mov.w   #WDTPW+WDTHOLD,&WDTCTL
-            ; Disable low-power mode
-            bic.w   #LOCKLPM5,&PM5CTL0
-            bis.w #GIE, SR              ; Enable global interrupts
+            ; -- P3.2 (I2C SCL) --
+            ; SCL here will be listening until it takes over
+            bic.b #BIT2, &P3SEL0    ; Set to Digital I/O
+            bic.b #BIT2, &P3SEL1    ; "...""
+            bis.b #BIT2, &P3DIR     ; Set dir to input
+            ;bis.b #BIT2, &P3REN     ; Enable resistor
+            bis.b #BIT2, &P3OUT     ; Pull-up
+
+            ; -- P3.0 (I2C SDA) --
+            ; SDA here will be listening until it takes over
+            bic.b #BIT0, &P3SEL0    ; Set to Digital I/O
+            bic.b #BIT0, &P3SEL1    ; "..."
+            bis.b #BIT0, &P3DIR     ; Set dir to input
+            ;bis.b #BIT0, &P3REN     ; Enable resistor
+            bis.b #BIT0, &P3OUT     ; Pull-up
+
+            ; -- Final Init --
+            mov.w   #WDTPW+WDTHOLD,&WDTCTL  ; Stop the watchdog timer
+            bic.w   #LOCKLPM5,&PM5CTL0      ; Disable low-power mode
+            nop
+            bis.w #GIE, SR                  ; Enable global interrupts
+            nop
 
 main:
+
+            call #i2c_start         ; Generate start condition on SDA/SCL
 
             nop
             jmp main
@@ -67,11 +83,32 @@ main:
 ; Subroutines
 ;-------------------------------------------------------------------------------
 
+; -- 12 us Delay --
+; When measuring on a scope, the time it takes
+; this function to execute between toggling
+; GPIO pins is roughly 12 us.
+delay_12us:
+            ret
+
+; -- I2C Start --
+; Generates the start condition for I2C
+i2c_start:
+
+            bis.b #BIT2, &P3DIR     ; Set SCL to output
+            bis.b #BIT0, &P3DIR     ; Set SDA to output
+
+            bic.b #BIT0, &P3OUT     ; Send SDA low for start
+            call #delay_12us        ; Delay between SDA and SCL low
+
+            bic.b #BIT2, &P3OUT     ; Send SCL low
+            ret
+
 ; --- Timer B0 ISR ---
 TB0_CCR0_ISR:
-	xor.b #BIT0, &P1OUT		; Toggle LED1
-	bic.w #CCIFG, &TB0CCTL0	; Clear interrupt flag
-	reti
+
+	        xor.b #BIT0, &P1OUT		; Toggle LED1
+	        bic.w #CCIFG, &TB0CCTL0	; Clear interrupt flag
+	        reti
 
 
 ;------------------------------------------------------------------------------

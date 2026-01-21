@@ -1,11 +1,13 @@
 SCL: P3.2
 SDA: P3.0
+R4 (lower byte): Tx Buffer
+R5 (lower byte): Rx Buffer
 
 START:
+- Set SCL and SDA as outputs
 - Send SDA low
 - Delay minimum 4 us (start hold)
 - Send SCL low
-- Wait ~4 us (Not req'd)
 
 SEND Address:
 - Set A6 on SDA

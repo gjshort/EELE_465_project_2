@@ -73,6 +73,8 @@ main:
 
             call #i2c_start         ; Generate start condition on SDA/SCL
 
+            ;call #i2c_stp           ; Generate stop condition *has not been tested*
+
             nop
             jmp main
             nop
@@ -102,6 +104,26 @@ i2c_start:
 
             bic.b #BIT2, &P3OUT     ; Send SCL low
             ret
+
+; -- I2C Stop --
+; Generates the stop condition for I2C
+i2c_stp:
+
+; From user guide UM10204 3.1.4; a LOW to HIGH transition on the SDA line while SCL is HIGH defines a STOP condition
+; The bus is considered to be free again a certain time (4.7 us) after the STOP condition.
+
+    bis.b   #BIT2, &P3DIR           ; Set SCL to output
+    bis.b   #BIT0, &P3DIR           ; Set SDA to output
+
+    bis.b   #BIT2, &P3OUT           ; Ensure SCL is in HIGH state
+    ;call    #delay_12us             ; Ensure enough rise time for SCL, which is only 1us but twelve-fold will do the trick
+
+    bic.b   #BIT0, &P3OUT           ; Ensure SDA is in LOW state
+    bis.b   #BIT0, &P3OUT           ; Make the transition to HIGH
+
+    call    #delay_12us             ; Ensure bus lines become free after condition generation
+
+    ret
 
 ; --- Timer B0 ISR ---
 TB0_CCR0_ISR:

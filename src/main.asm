@@ -73,6 +73,12 @@ main:
 
             call #i2c_start         ; Generate start condition on SDA/SCL
 
+            call #delay_50ms
+            bis.b #BIT0, &P3OUT
+            bis.b #BIT2, &P3OUT
+            call #delay_50ms
+
+
             ;call #i2c_stp           ; Generate stop condition *has not been tested*
 
             nop
@@ -84,6 +90,14 @@ main:
 ;-------------------------------------------------------------------------------
 ; Subroutines
 ;-------------------------------------------------------------------------------
+
+; --- Delay 50 ms ---
+delay_50ms:
+	mov.w #04440h, R4	    ; Set delay counter (started at 30D1)
+delay_50ms_loop:
+	dec.w R4				; 
+	jnz delay_50ms_loop	    ; Repeat loop until R4 is 0 
+	ret
 
 ; -- 12 us Delay --
 ; When measuring on a scope, the time it takes

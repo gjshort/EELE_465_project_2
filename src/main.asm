@@ -24,6 +24,15 @@
             ; Initialize the stack pointer to the bottom of the stack
 RESET       mov.w   #__STACK_END,SP
 
+;-------------------------------------------------------------------------------
+; Macros
+;-------------------------------------------------------------------------------
+
+SDA_PIN .equ #BIT0
+SCL_PIN .equ #BIT2
+I2C_DIR .equ #P3DIR
+
+
 
 init:
 
@@ -48,19 +57,19 @@ init:
 
             ; -- P3.2 (I2C SCL) --
             ; SCL here will be listening until it takes over
-            bic.b #BIT2, &P3SEL0    ; Set to Digital I/O
-            bic.b #BIT2, &P3SEL1    ; "...""
-            bic.b #BIT2, &P3DIR     ; Set dir to input
-            bis.b #BIT2, &P3REN     ; Enable resistor
-            bis.b #BIT2, &P3OUT     ; Pull-up
+            bic.b #SCL_PIN, &P3SEL0    ; Set to Digital I/O
+            bic.b #SCL_PIN, &P3SEL1    ; "...""
+            bic.b #SCL_PIN, &I2C_DIR     ; Set dir to input
+            bis.b #SCL_PIN, &P3REN     ; Enable resistor
+            bis.b #SCL_PIN, &P3OUT     ; Pull-up
 
             ; -- P3.0 (I2C SDA) --
             ; SDA here will be listening until it takes over
-            bic.b #BIT0, &P3SEL0    ; Set to Digital I/O
-            bic.b #BIT0, &P3SEL1    ; "..."
-            bic.b #BIT0, &P3DIR     ; Set dir to input
-            bis.b #BIT0, &P3REN     ; Enable resistor
-            bis.b #BIT0, &P3OUT     ; Pull-up
+            bic.b #SDA_PIN, &P3SEL0    ; Set to Digital I/O
+            bic.b #SDA_PIN, &P3SEL1    ; "..."
+            bic.b #SDA_PIN, &I2C_DIR     ; Set dir to input
+            bis.b #SDA_PIN, &P3REN     ; Enable resistor
+            bis.b #SDA_PIN, &P3OUT     ; Pull-up
 
             ; -- Final Init --
             mov.w   #WDTPW+WDTHOLD,&WDTCTL  ; Stop the watchdog timer
@@ -89,11 +98,13 @@ main:
 
 ; --- Delay 50 ms ---
 delay_50ms:
-	mov.w #04440h, R4	    ; Set delay counter (started at 30D1)
+            push R4
+	        mov.w #04440h, R4	    ; Set delay counter (started at 30D1)
 delay_50ms_loop:
-	dec.w R4				; 
-	jnz delay_50ms_loop	    ; Repeat loop until R4 is 0 
-	ret
+            dec.w R4				; 
+            jnz delay_50ms_loop	    ; Repeat loop until R4 is 0 
+            pop R4
+	        ret
 
 ; -- 12 us Delay --
 ; When measuring on a scope, the time it takes
@@ -106,13 +117,13 @@ delay_12us:
 ; Generates the start condition for I2C
 i2c_start:
 
-            bis.b #BIT2, &P3DIR     ; Set SCL to output
-            bis.b #BIT0, &P3DIR     ; Set SDA to output
+            bis.b #SCL_PIN, &I2C_DIR     ; Set SCL to output
+            bis.b #SDA_PIN, &I2C_DIR     ; Set SDA to output
 
-            bic.b #BIT0, &P3OUT     ; Send SDA low for start
+            bic.b #SDA_PIN, &P3OUT     ; Send SDA low for start
             call #delay_12us        ; Delay between SDA and SCL low
 
-            bic.b #BIT2, &P3OUT     ; Send SCL low
+            bic.b #SCL_PIN, &P3OUT     ; Send SCL low
             ret
 
 ; -- I2C Stop --
@@ -122,14 +133,14 @@ i2c_stp:
 ; From user guide UM10204 3.1.4; a LOW to HIGH transition on the SDA line while SCL is HIGH defines a STOP condition
 ; The bus is considered to be free again a certain time (4.7 us) after the STOP condition.
 
-    bis.b   #BIT2, &P3DIR           ; Set SCL to output
-    bis.b   #BIT0, &P3DIR           ; Set SDA to output
+    bis.b   #SCL_PIN, &I2C_DIR           ; Set SCL to output
+    bis.b   #SDA_PIN, &I2C_DIR           ; Set SDA to output
 
-    bic.b   #BIT0, &P3OUT           ; Ensure SDA is in LOW state
-    bis.b   #BIT2, &P3OUT           ; Ensure SCL is in HIGH state
+    bic.b   #SDA_PIN, &P3OUT           ; Ensure SDA is in LOW state
+    bis.b   #SCL_PIN, &P3OUT           ; Ensure SCL is in HIGH state
     call    #delay_12us             ; Ensure enough rise time for SCL, which is only 1us but twelve-fold will do the trick
 
-    bis.b   #BIT0, &P3OUT           ; Make the transition to HIGH
+    bis.b   #SDA_PIN, &P3OUT           ; Make the transition to HIGH
 
     call    #delay_12us             ; Ensure bus lines become free after condition generation
 

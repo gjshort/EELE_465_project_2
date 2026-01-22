@@ -74,12 +74,8 @@ main:
             call #i2c_start         ; Generate start condition on SDA/SCL
 
             call #delay_50ms
-            bis.b #BIT0, &P3OUT
-            bis.b #BIT2, &P3OUT
+            call #i2c_stp
             call #delay_50ms
-
-
-            ;call #i2c_stp           ; Generate stop condition *has not been tested*
 
             nop
             jmp main
@@ -129,10 +125,10 @@ i2c_stp:
     bis.b   #BIT2, &P3DIR           ; Set SCL to output
     bis.b   #BIT0, &P3DIR           ; Set SDA to output
 
-    bis.b   #BIT2, &P3OUT           ; Ensure SCL is in HIGH state
-    ;call    #delay_12us             ; Ensure enough rise time for SCL, which is only 1us but twelve-fold will do the trick
-
     bic.b   #BIT0, &P3OUT           ; Ensure SDA is in LOW state
+    bis.b   #BIT2, &P3OUT           ; Ensure SCL is in HIGH state
+    call    #delay_12us             ; Ensure enough rise time for SCL, which is only 1us but twelve-fold will do the trick
+
     bis.b   #BIT0, &P3OUT           ; Make the transition to HIGH
 
     call    #delay_12us             ; Ensure bus lines become free after condition generation

@@ -28,9 +28,9 @@ RESET       mov.w   #__STACK_END,SP
 ; Macros
 ;-------------------------------------------------------------------------------
 
-SDA_PIN .equ #BIT0
-SCL_PIN .equ #BIT2
-I2C_DIR .equ #P3DIR
+SDA_PIN .equ BIT0
+SCL_PIN .equ BIT2
+I2C_DIR .equ P3DIR
 
 
 

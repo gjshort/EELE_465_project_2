@@ -162,44 +162,44 @@ i2c_stp:
 
 ; -- I2C Tx Byte --
 i2c_tx_byte:
+; This subroutine along with the following nested (indented) routines will handle transmitting a byte.
+; General workflow of this is to move whatever you want to be sent (stored in reserved space tx_byte) to R4, test MSB in R4
+; and then based on Z flag after the test manipulate SDA and SCL lines to transmit the message one bit at a time. each bit 
+; being sent is the MSB in R4, so we use a rotate operation in next_bit to shift the next bit that is to be sent into the MSB 
+; position of R4, while a counter variable (R15) keeps track to send exactly a byte worth including (R/W) before exiting this subroutine back to main.
 
     push    R4                      ; Save previous state of R4 to stack
 
     mov.w   &tx_byte, R4            ; move whatever is in tx byte to R4
 
-msb_tst:
-    bit.b   #MSB_MASK, R4           ; tst MSB of R4
+    msb_tst:
+        bit.b   #MSB_MASK, R4           ; tst MSB of R4
+        jnz     sda_high                ; if MSB in R4 is not 0 go to sda_high
 
-    jnz     sda_high                ; if MSB in R4 is not 0 go to sda_high
+    sda_low:
+        bic.b   #SDA_PIN, &P3OUT        ; set SDA to LOW
+        jmp     tx_scl                  
 
-sda_low:
+    sda_high:
+        bis.b   #SDA_PIN, &P3OUT        ; Set SDA to HIGH
 
-    bic.b   #SDA_PIN, &P3OUT        ; set SDA to LOW
-    jmp     tx_scl                  
+    tx_scl:
+        call    #delay_12us             ; ensure SDA in LOW state
 
-sda_high:
+        bis.b   #SCL_PIN, &P3OUT        ; Set SCL to HIGH
+        call    #delay_12us             ; Ensure SCL is HIGH
 
-    bis.b   #SDA_PIN, &P3OUT        ; Set SDA to HIGH
+        bic.b   #SCL_PIN, &P3OUT        ; Set SCL to LOW
+        call    #delay_12us             ; SCL hold delay
 
-tx_scl:
+    next_bit:
+        rlc     R4                      ; Rotate to the next MSB to send
+        dec.w   R15
+        jnz     msb_tst                  
 
-    call    #delay_12us             ; ensure SDA in LOW state
-
-    bis.b   #SCL_PIN, &P3OUT        ; Set SCL to HIGH
-    call    #delay_12us             ; Ensure SCL is HIGH
-
-    bic.b   #SCL_PIN, &P3OUT        ; Set SCL to LOW
-    call    #delay_12us             ; SCL hold delay
-
-next_bit:
-
-    rlc     R4                      ; Rotate to the next MSB to send
-    dec.w   R15
-    jnz     msb_tst                  
-
-    mov.w   #9d, R15                ; Reset Tx/Rx counter variable
-    pop     R4                      ; Restore R4 from stack
-    ret
+        mov.w   #9d, R15                ; Reset Tx/Rx counter variable
+        pop     R4                      ; Restore R4 from stack
+        ret
 
 ; --- Timer B0 ISR ---
 TB0_CCR0_ISR:

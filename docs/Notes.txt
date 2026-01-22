@@ -2,6 +2,42 @@ SCL: P3.2
 SDA: P3.0
 R4 (lower byte): Tx Buffer
 R5 (lower byte): Rx Buffer
+R15 reserved for Tx/Rx bit counting
+
+----------- tx_byte pseudocode ------------
+R4: xxxx xxxx 0101 0101
+	      ^
+	     MSb
+
+--> MSb bit mask = 0x80
+
+bit.b 0x80, R4
+jz send_zero
+
+send_one
+	SDA high
+	jmp tx_scl
+
+send_zero
+	SDA low
+	jmp tx_scl
+
+tx_scl:
+	setup_delay
+	SCL high
+	clock_high_delay
+	SCL low
+	hold_delay
+
+next_bit
+	rlc R4
+	dec.w R15
+	jnz tx_loop
+
+	mov.w #9d, R15
+	pop R4
+	
+
 
 START:
 - Set SCL and SDA as outputs

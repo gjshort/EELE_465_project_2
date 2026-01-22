@@ -36,6 +36,9 @@ I2C_DIR .equ P3DIR
 
 init:
 
+            ; -- Register Init --
+            mov.w   #9d, R15        ; Counter register for Tx/Rx
+
             ; -- P1.0 (LED1 Heartbeat) --
             bic.b #BIT0, &P1SEL0    ; Set to Digital I/O
             bic.b #BIT0, &P1SEL1    ; "..."
@@ -128,8 +131,8 @@ i2c_start:
 
 ; -- I2C Stop --
 ; Generates the stop condition for I2C
-i2c_stp:
 
+i2c_stp:
 ; From user guide UM10204 3.1.4; a LOW to HIGH transition on the SDA line while SCL is HIGH defines a STOP condition
 ; The bus is considered to be free again a certain time (4.7 us) after the STOP condition.
 
@@ -145,6 +148,19 @@ i2c_stp:
     call    #delay_12us             ; Ensure bus lines become free after condition generation
 
     ret
+
+; -- I2C Tx Byte --
+i2c_tx_byte:
+
+    push    R4                      ; Save previous state of R4 to stack
+
+    ;tx_byte Byte   8                ; Create tx variable, initialize value
+    ;bit.b   tx_byte                 ; Tst if MSB is 1 or 0
+
+    ;jnz     sda_to_high
+
+    mov.w   #9d, R15                ; Reset Tx/Rx counter variable
+    pop     R4                      ; Restore R4 from stack
 
 ; --- Timer B0 ISR ---
 TB0_CCR0_ISR:
@@ -164,3 +180,12 @@ TB0_CCR0_ISR:
 	        .short	TB0_CCR0_ISR
 
             .end
+
+;--------------------------------------------------------------------------------
+; Data Allocation
+;--------------------------------------------------------------------------------
+
+    .Data
+    .retain
+
+tx_byte:    .space  1           ; reserve space for Tx/Rx address

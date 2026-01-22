@@ -17,6 +17,15 @@
             ; Assemble to flash memory
             .text
 
+;--------------------------------------------------------------------------------
+; Data Allocation
+;--------------------------------------------------------------------------------
+
+    .data
+    .retain
+
+tx_byte:    .space  1           ; reserve space for Tx/Rx address
+
             ; Ensure current section gets linked
             .retain
             .retainrefs
@@ -32,9 +41,13 @@ SDA_PIN .equ BIT0
 SCL_PIN .equ BIT2
 I2C_DIR .equ P3DIR
 
+MSB_MASK .equ 0x80
 
 
 init:
+
+            ; -- Register Init --
+            mov.w   #9d, R15        ; Counter register for Tx/Rx
 
             ; -- P1.0 (LED1 Heartbeat) --
             bic.b #BIT0, &P1SEL0    ; Set to Digital I/O
@@ -80,12 +93,13 @@ init:
 
 main:
 
+            mov.w   #69h, tx_byte   ; send data to tx_byte
             call #i2c_start         ; Generate start condition on SDA/SCL
-
-            call #delay_50ms
+            call #i2c_tx_byte
             call #i2c_stp
+            
             call #delay_50ms
-
+            
             nop
             jmp main
             nop
@@ -128,8 +142,8 @@ i2c_start:
 
 ; -- I2C Stop --
 ; Generates the stop condition for I2C
-i2c_stp:
 
+i2c_stp:
 ; From user guide UM10204 3.1.4; a LOW to HIGH transition on the SDA line while SCL is HIGH defines a STOP condition
 ; The bus is considered to be free again a certain time (4.7 us) after the STOP condition.
 
@@ -144,6 +158,47 @@ i2c_stp:
 
     call    #delay_12us             ; Ensure bus lines become free after condition generation
 
+    ret
+
+; -- I2C Tx Byte --
+i2c_tx_byte:
+
+    push    R4                      ; Save previous state of R4 to stack
+
+    mov.w   &tx_byte, R4            ; move whatever is in tx byte to R4
+
+msb_tst:
+    bit.b   #MSB_MASK, R4           ; tst MSB of R4
+
+    jnz     sda_high                ; if MSB in R4 is not 0 go to sda_high
+
+sda_low:
+
+    bic.b   #SDA_PIN, &P3OUT        ; set SDA to LOW
+    jmp     tx_scl                  
+
+sda_high:
+
+    bis.b   #SDA_PIN, &P3OUT        ; Set SDA to HIGH
+
+tx_scl:
+
+    call    #delay_12us             ; ensure SDA in LOW state
+
+    bis.b   #SCL_PIN, &P3OUT        ; Set SCL to HIGH
+    call    #delay_12us             ; Ensure SCL is HIGH
+
+    bic.b   #SCL_PIN, &P3OUT        ; Set SCL to LOW
+    call    #delay_12us             ; SCL hold delay
+
+next_bit:
+
+    rlc     R4                      ; Rotate to the next MSB to send
+    dec.w   R15
+    jnz     msb_tst                  
+
+    mov.w   #9d, R15                ; Reset Tx/Rx counter variable
+    pop     R4                      ; Restore R4 from stack
     ret
 
 ; --- Timer B0 ISR ---

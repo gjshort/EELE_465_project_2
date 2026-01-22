@@ -17,6 +17,15 @@
             ; Assemble to flash memory
             .text
 
+;--------------------------------------------------------------------------------
+; Data Allocation
+;--------------------------------------------------------------------------------
+
+    .data
+    .retain
+
+tx_byte:    .space  1           ; reserve space for Tx/Rx address
+
             ; Ensure current section gets linked
             .retain
             .retainrefs
@@ -32,6 +41,7 @@ SDA_PIN .equ BIT0
 SCL_PIN .equ BIT2
 I2C_DIR .equ P3DIR
 
+MSB_MASK .equ 0x80
 
 
 init:
@@ -83,12 +93,13 @@ init:
 
 main:
 
+            mov.w   #69h, tx_byte   ; send data to tx_byte
             call #i2c_start         ; Generate start condition on SDA/SCL
-
-            call #delay_50ms
+            call #i2c_tx_byte
             call #i2c_stp
+            
             call #delay_50ms
-
+            
             nop
             jmp main
             nop
@@ -154,13 +165,41 @@ i2c_tx_byte:
 
     push    R4                      ; Save previous state of R4 to stack
 
-    ;tx_byte Byte   8                ; Create tx variable, initialize value
-    ;bit.b   tx_byte                 ; Tst if MSB is 1 or 0
+    mov.w   &tx_byte, R4            ; move whatever is in tx byte to R4
 
-    ;jnz     sda_to_high
+msb_tst:
+    bit.b   #MSB_MASK, R4           ; tst MSB of R4
+
+    jnz     sda_high                ; if MSB in R4 is not 0 go to sda_high
+
+sda_low:
+
+    bic.b   #SDA_PIN, &P3OUT        ; set SDA to LOW
+    jmp     tx_scl                  
+
+sda_high:
+
+    bis.b   #SDA_PIN, &P3OUT        ; Set SDA to HIGH
+
+tx_scl:
+
+    call    #delay_12us             ; ensure SDA in LOW state
+
+    bis.b   #SCL_PIN, &P3OUT        ; Set SCL to HIGH
+    call    #delay_12us             ; Ensure SCL is HIGH
+
+    bic.b   #SCL_PIN, &P3OUT        ; Set SCL to LOW
+    call    #delay_12us             ; SCL hold delay
+
+next_bit:
+
+    rlc     R4                      ; Rotate to the next MSB to send
+    dec.w   R15
+    jnz     msb_tst                  
 
     mov.w   #9d, R15                ; Reset Tx/Rx counter variable
     pop     R4                      ; Restore R4 from stack
+    ret
 
 ; --- Timer B0 ISR ---
 TB0_CCR0_ISR:
@@ -180,12 +219,3 @@ TB0_CCR0_ISR:
 	        .short	TB0_CCR0_ISR
 
             .end
-
-;--------------------------------------------------------------------------------
-; Data Allocation
-;--------------------------------------------------------------------------------
-
-    .Data
-    .retain
-
-tx_byte:    .space  1           ; reserve space for Tx/Rx address

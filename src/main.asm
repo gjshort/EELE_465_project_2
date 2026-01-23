@@ -201,6 +201,19 @@ i2c_tx_byte:
         pop     R4                      ; Restore R4 from stack
         ret
 
+;-- i2c_ack --
+i2c_ack:
+; This subroutine will force an ACK signal to be sent, for I2C protocol, this should be sent during the 9th clock cycle on SCL.
+; To achieve this we will simply send SDA to a low after it is released from the R/W bit and have it remain LOW during SCLs 
+; HIGH period of this 9th clock pulse set-up and hold times. NOT TESTED YET
+
+    bic.b   #SDA_PIN, &P3OUT        ; Take SDA to a LOW state
+
+    bis.b   #SCL_PIN, &P3OUT        ; Take SCL to a HIGH state (if not in a HIGH state already)
+    call    #delay_12us             ; Delay to ensure SDA is in LOW state for SCLs setup and hold times in HIGH state. 12us should be more than enough time.
+
+    ret                             ; Go back to main program flow.
+
 ; --- Timer B0 ISR ---
 TB0_CCR0_ISR:
 

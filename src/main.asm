@@ -21,16 +21,17 @@
 ; Data Allocation
 ;--------------------------------------------------------------------------------
 
-    .data                         ; go to data memory (2000h)
-    .retain                       ; keep this section, even if not used
+            .data                         ; go to data memory (2000h)
+            .retain                       ; keep this section, even if not used
 
-tx_byte:    .short  69h           ; init words to specified hex
-tx_byte2:   .short  67h           ; ..^
-tx_byte3:   .short  70h           ; ..^
+tx_byte:    .byte  0            ; Memory location where a byte destined for
+                                ; i2c transmit is stored  
 
             ; Ensure current section gets linked
             .retain
             .retainrefs
+
+
 
             ; Initialize the stack pointer to the bottom of the stack
 RESET       mov.w   #__STACK_END,SP
@@ -49,7 +50,7 @@ MSB_MASK .equ 0x80
 init:
 
             ; -- Register Init --
-            mov.w   #9d, R15        ; Counter register for Tx/Rx
+            mov.w   #8d, R15        ; Counter register for Tx/Rx
 
             ; -- P1.0 (LED1 Heartbeat) --
             bic.b #BIT0, &P1SEL0    ; Set to Digital I/O
@@ -94,23 +95,8 @@ init:
             nop
 
 main:
-
-            ; code below was causing conflict sending multiple bytes, (first two bytes were getting repeated for some reason)
-            ; I think it was because when you reserve space, to 2000h memory sometimes it gets lost, so in data allocation
-            ; I ended up going for doing .short instead of .space so the values are init from the gecko at each separate
-            ; location in memory (200h, 2002h, 2004h) See the changes in Data Allocation section above
-            ;       mov.w   #67h, tx_byte       ; send data to tx_byte
-            ;       mov.w   #69h, tx_byte2      ; send cursed data to tx_byte2
-            ;       mov.w   #70h, tx_byte3      ; send data to tx_byte3
-
             ; this call will go through the program flow to transmit 3 bytes
-             call    #i2c_Nbytes
-
-            ;call    #i2c_start
-            ;call    #i2c_tx_byte
-            ;call    #i2c_ack
-            ;call    #i2c_nack
-            ;call    #i2c_stp
+            call #i2c_Nbytes
             
             call #delay_50ms
             
@@ -127,7 +113,7 @@ main:
 ; --- Delay 50 ms ---
 delay_50ms:
             push R4
-	        mov.w #04440h, R4	    ; Set delay counter (started at 30D1)
+	    mov.w #04440h, R4	    ; Set delay counter (started at 30D1)
 delay_50ms_loop:
             dec.w R4				; 
             jnz delay_50ms_loop	    ; Repeat loop until R4 is 0 
@@ -183,7 +169,7 @@ i2c_tx_byte:
 
     push    R4                      ; Save previous state of R4 to stack
 
-    mov.w   &tx_byte, R4            ; move whatever is in tx byte to R4
+    mov.b   &tx_byte, R4            ; move whatever is in tx byte to R4
 
 msb_tst:
         bit.b   #MSB_MASK, R4           ; tst MSB of R4
@@ -210,84 +196,12 @@ next_bit:
         dec.w   R15
         jnz     msb_tst                  
 
-        mov.w   #9d, R15                ; Reset Tx/Rx counter variable
+        mov.w   #8d, R15                ; Reset Tx/Rx counter variable
         pop     R4                      ; Restore R4 from stack
         ret
 
-i2c_tx_byte2:
-; This subroutine is the same as i2c_tx_byte, just different byte being sent
-
-    push    R4                      ; Save previous state of R4 to stack
-
-    mov.w   &tx_byte2, R4            ; move whatever is in tx byte to R4
-
-msb_tst2:
-        bit.b   #MSB_MASK, R4           ; tst MSB of R4
-        jnz     sda_high                ; if MSB in R4 is not 0 go to sda_high
-
-sda_low2:
-        bic.b   #SDA_PIN, &P3OUT        ; set SDA to LOW
-        jmp     tx_scl                  
-
-sda_high2:
-        bis.b   #SDA_PIN, &P3OUT        ; Set SDA to HIGH
-
-tx_scl2:
-        call    #delay_12us             ; ensure SDA in LOW state
-
-        bis.b   #SCL_PIN, &P3OUT        ; Set SCL to HIGH
-        call    #delay_12us             ; Ensure SCL is HIGH
-
-        bic.b   #SCL_PIN, &P3OUT        ; Set SCL to LOW
-        call    #delay_12us             ; SCL hold delay
-
-next_bit2:
-        rlc     R4                      ; Rotate to the next MSB to send
-        dec.w   R15
-        jnz     msb_tst                  
-
-        mov.w   #9d, R15                ; Reset Tx/Rx counter variable
-        pop     R4                      ; Restore R4 from stack
-        ret
-
-i2c_tx_byte3:
-; This subroutine is the same as i2c_tx_byte, just different byte being sent
-
-    push    R4                      ; Save previous state of R4 to stack
-
-    mov.w   &tx_byte3, R4            ; move whatever is in tx byte to R4
-
-msb_tst23:
-        bit.b   #MSB_MASK, R4           ; tst MSB of R4
-        jnz     sda_high                ; if MSB in R4 is not 0 go to sda_high
-
-sda_low3:
-        bic.b   #SDA_PIN, &P3OUT        ; set SDA to LOW
-        jmp     tx_scl                  
-
-sda_high3:
-        bis.b   #SDA_PIN, &P3OUT        ; Set SDA to HIGH
-
-tx_scl3:
-        call    #delay_12us             ; ensure SDA in LOW state
-
-        bis.b   #SCL_PIN, &P3OUT        ; Set SCL to HIGH
-        call    #delay_12us             ; Ensure SCL is HIGH
-
-        bic.b   #SCL_PIN, &P3OUT        ; Set SCL to LOW
-        call    #delay_12us             ; SCL hold delay
-
-next_bit3:
-        rlc     R4                      ; Rotate to the next MSB to send
-        dec.w   R15
-        jnz     msb_tst                  
-
-        mov.w   #9d, R15                ; Reset Tx/Rx counter variable
-        pop     R4                      ; Restore R4 from stack
-        ret
-
-;-- i2c_ack --
-i2c_ack:
+;-- i2c_tx_ack --
+i2c_tx_ack:
 ; This subroutine will force an ACK signal to be sent, for I2C protocol, this should be sent during the 9th clock cycle on SCL.
 ; To achieve this we will simply send SDA to a low after it is released from the R/W bit and have it remain LOW during SCLs 
 ; HIGH period of this 9th clock pulse set-up and hold times.
@@ -297,20 +211,22 @@ i2c_ack:
 
     bis.b   #SCL_PIN, &P3OUT        ; Take SCL to a HIGH state (if not in a HIGH state already)
     call    #delay_12us             ; Delay to ensure SDA is in LOW state for SCLs setup and hold times in HIGH state. 12us should be more than enough time.
+    bic.b   #SCL_PIN, &P3OUT        ; Take SCL LOW
 
     ret                             ; Go back to main program flow.
 
-;-- i2c_nack -- 
+;-- i2c_tx_nack -- 
 ; Okay now this next one is just like the subroutine in direct predecession to this one, except instead we will send a NACK signal on SCLs 9th cycle.
 ; Now apparently theres actually 5 different situations where a NACK will be sent, this subroutine is the brute force approach.
 ; We keep SDA HIGH while the SCL enters its 9th cycle.
-i2c_nack:
+i2c_tx_nack:
 
     bis.b   #SDA_PIN, &P3OUT        ; Send SDA HIGH
     call    #delay_12us             ; give it time, son
 
     bis.b   #SCL_PIN, &P3OUT        ; Send SCL HIGH
     call    #delay_12us
+    bic.b   #SCL_PIN, &P3OUT        ; Take SCL LOW
 
     ret
 
@@ -323,18 +239,19 @@ i2c_Nbytes:
     call #i2c_start
 
     ; Transmits 1st byte, send ack, then send repeated start
+    mov.b   #69h, &tx_byte
     call    #i2c_tx_byte
-    call    #i2c_nack               ; Okay so we did need NACK, maybe? My thought was to froce a nack so it can send a repeat start condition for next byte.
-    call    #i2c_start
+    call    #i2c_tx_ack               ; Okay so we did need NACK, maybe? My thought was to froce a nack so it can send a repeat start condition for next byte.
 
     ; Transmits 2nd byte, ..^
-    call    #i2c_tx_byte2
-    call    #i2c_nack
-    call    #i2c_start
+    mov.b   #67h, &tx_byte
+    call    #i2c_tx_byte
+    call    #i2c_tx_ack
 
     ; Transmits 3rd byte, ..^
-    call    #i2c_tx_byte3
-    call    #i2c_ack
+    mov.b   #70h, &tx_byte
+    call    #i2c_tx_byte
+    call    #i2c_tx_nack
 
     ; End of bytes, generate STOP
     call    #i2c_stp

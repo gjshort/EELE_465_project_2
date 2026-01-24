@@ -96,6 +96,7 @@ main:
             mov.w   #69h, tx_byte   ; send data to tx_byte
             call #i2c_start         ; Generate start condition on SDA/SCL
             call #i2c_tx_byte
+            call #i2c_ack
             call #i2c_stp
             
             call #delay_50ms
@@ -162,7 +163,7 @@ i2c_stp:
 
 ; -- I2C Tx Byte --
 i2c_tx_byte:
-; This subroutine along with the following nested (indented) routines will handle transmitting a byte.
+; This subroutine along with the following nested routines will handle transmitting a byte.
 ; General workflow of this is to move whatever you want to be sent (stored in reserved space tx_byte) to R4, test MSB in R4
 ; and then based on Z flag after the test manipulate SDA and SCL lines to transmit the message one bit at a time. each bit 
 ; being sent is the MSB in R4, so we use a rotate operation in next_bit to shift the next bit that is to be sent into the MSB 
@@ -172,18 +173,18 @@ i2c_tx_byte:
 
     mov.w   &tx_byte, R4            ; move whatever is in tx byte to R4
 
-    msb_tst:
+msb_tst:
         bit.b   #MSB_MASK, R4           ; tst MSB of R4
         jnz     sda_high                ; if MSB in R4 is not 0 go to sda_high
 
-    sda_low:
+sda_low:
         bic.b   #SDA_PIN, &P3OUT        ; set SDA to LOW
         jmp     tx_scl                  
 
-    sda_high:
+sda_high:
         bis.b   #SDA_PIN, &P3OUT        ; Set SDA to HIGH
 
-    tx_scl:
+tx_scl:
         call    #delay_12us             ; ensure SDA in LOW state
 
         bis.b   #SCL_PIN, &P3OUT        ; Set SCL to HIGH
@@ -192,7 +193,7 @@ i2c_tx_byte:
         bic.b   #SCL_PIN, &P3OUT        ; Set SCL to LOW
         call    #delay_12us             ; SCL hold delay
 
-    next_bit:
+next_bit:
         rlc     R4                      ; Rotate to the next MSB to send
         dec.w   R15
         jnz     msb_tst                  
@@ -208,6 +209,7 @@ i2c_ack:
 ; HIGH period of this 9th clock pulse set-up and hold times. NOT TESTED YET
 
     bic.b   #SDA_PIN, &P3OUT        ; Take SDA to a LOW state
+    call    #delay_12us
 
     bis.b   #SCL_PIN, &P3OUT        ; Take SCL to a HIGH state (if not in a HIGH state already)
     call    #delay_12us             ; Delay to ensure SDA is in LOW state for SCLs setup and hold times in HIGH state. 12us should be more than enough time.

@@ -51,6 +51,7 @@ init:
 
             ; -- Register Init --
             mov.w   #8d, R15        ; Counter register for Tx/Rx
+            mov.w   #0d, R14        ; Return register for ACK/NACK
 
             ; -- P1.0 (LED1 Heartbeat) --
             bic.b #BIT0, &P1SEL0    ; Set to Digital I/O
@@ -230,6 +231,31 @@ i2c_tx_nack:
 
     ret
 
+; -- i2c_rx_ack -- 
+; Releases SDA and pulses SCL so that the target can pull it high or low
+; to indicate ACK/NACK. Saves the SR zero flag in R14.
+i2c_rx_ack:
+
+        bis.b #SDA_PIN, &P3OUT          ; Input pull-up resister
+        bis.b #SDA_PIN, &P3REN          ; Enable resistor
+        bic.b #SDA_PIN, &I2C_DIR        ; Set SDA to input
+        call #delay_12us                ; Let slave set up ACK/NACK
+
+        bis.b #SCL_PIN, &P3OUT          ; Send SCL HIGH
+        call #delay_12us                ; SCL hold
+        
+        bit.b #SDA_PIN, &P3OUT          ; Check for ACK/NACK
+        mov.w SR, R14                   ; Get Zero flag from SR
+        and.w #Z, R14   
+
+        call #delay_12us                ; SCL hold
+        bic.b #SCL_PIN, &P3OUT          ; Send SCL LOW
+
+        bis.b #SDA_PIN, &I2C_DIR        ; Set SDA to output           
+
+        ret
+
+
 ;-- i2c_Nbytes --
 ; This subroutine will send multiple bytes with an ACK after each address, we will be using previously made subroutines, 
 ;so look at those for the details of how it all works
@@ -239,19 +265,19 @@ i2c_Nbytes:
     call #i2c_start
 
     ; Transmits 1st byte, send ack, then send repeated start
-    mov.b   #69h, &tx_byte
+    mov.b   #68h, &tx_byte
     call    #i2c_tx_byte
-    call    #i2c_tx_ack               ; Okay so we did need NACK, maybe? My thought was to froce a nack so it can send a repeat start condition for next byte.
+    call    #i2c_rx_ack               ; Okay so we did need NACK, maybe? My thought was to froce a nack so it can send a repeat start condition for next byte.
 
     ; Transmits 2nd byte, ..^
     mov.b   #67h, &tx_byte
     call    #i2c_tx_byte
-    call    #i2c_tx_ack
+    call    #i2c_rx_ack
 
     ; Transmits 3rd byte, ..^
     mov.b   #70h, &tx_byte
     call    #i2c_tx_byte
-    call    #i2c_tx_nack
+    call    #i2c_rx_ack
 
     ; End of bytes, generate STOP
     call    #i2c_stp

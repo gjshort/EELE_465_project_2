@@ -244,7 +244,7 @@ i2c_rx_ack:
         bis.b #SCL_PIN, &P3OUT          ; Send SCL HIGH
         call #delay_12us                ; SCL hold
         
-        bit.b #SDA_PIN, &P3OUT          ; Check for ACK/NACK
+        bit.b #SDA_PIN, &P3IN          ; Check for ACK/NACK
         mov.w SR, R14                   ; Get Zero flag from SR
         and.w #Z, R14   
 
@@ -297,6 +297,8 @@ i2c_tx_count:
         mov.b #68h, &tx_byte     ; Addr 0x34 | Read
         call #i2c_tx_byte
         call #i2c_rx_ack
+        bit.b #Z, R14           ; Check ACK return
+        jz exit_i2c_tx_count   ; Exit if NACK
 
 send_count:
         
@@ -308,8 +310,8 @@ send_count:
         cmp.w #10, R6           ; Count 0 thru 9
         jne send_count          ; Send next counter val
 
+exit_i2c_tx_count:
         call #i2c_stp
-
         pop R6                  ; Restore R6
         ret
 

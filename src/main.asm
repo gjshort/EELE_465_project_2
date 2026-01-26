@@ -97,7 +97,7 @@ init:
 
 main:
             ; this call will go through the program flow to transmit 3 bytes
-            call #i2c_Nbytes
+            call #i2c_tx_count
             
             call #delay_50ms
             
@@ -283,6 +283,35 @@ i2c_Nbytes:
     call    #i2c_stp
 
     ret
+
+;-- i2c_tx_count --
+; R6 counts from 0 thru 9 and the value is transmitted
+; over I2C to the address entered below.
+i2c_tx_count:
+
+        push R6                 ; Preserve R6
+        mov.w #0, R6            ; Init counter
+        call #i2c_start
+
+        ; Send address
+        mov.b #68h, &tx_byte     ; Addr 0x34 | Read
+        call #i2c_tx_byte
+        call #i2c_rx_ack
+
+send_count:
+        
+        mov.w R6, &tx_byte      ; Copy counter val to i2c Tx buffer
+        call #i2c_tx_byte       ; Tx i2c buffer
+        call #i2c_rx_ack        ; Receive ACK from target
+
+        inc.w R6                ; Increment counter
+        cmp.w #10, R6           ; Count 0 thru 9
+        jne send_count          ; Send next counter val
+
+        call #i2c_stp
+
+        pop R6                  ; Restore R6
+        ret
 
 ; --- Timer B0 ISR ---
 TB0_CCR0_ISR:

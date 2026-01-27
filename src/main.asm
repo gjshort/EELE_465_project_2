@@ -97,8 +97,11 @@ init:
 
 main:
             ; this call will go through the program flow to transmit 3 bytes
-            call #i2c_tx_count
+            ;call #i2c_tx_count
             
+            ; this call will go through the program flow to receive a byte
+            call #i2c_rx_byte
+
             call #delay_50ms
             
             nop
@@ -172,6 +175,8 @@ i2c_tx_byte:
 
     mov.b   &tx_byte, R4            ; move whatever is in tx byte to R4
 
+    bis.b   #SDA_PIN, &I2C_DIR           ; Set SDA to output
+
 msb_tst:
         bit.b   #MSB_MASK, R4           ; tst MSB of R4
         jnz     sda_high                ; if MSB in R4 is not 0 go to sda_high
@@ -207,6 +212,8 @@ i2c_tx_ack:
 ; To achieve this we will simply send SDA to a low after it is released from the R/W bit and have it remain LOW during SCLs 
 ; HIGH period of this 9th clock pulse set-up and hold times.
 
+    bis.b   #SDA_PIN, &I2C_DIR           ; Set SDA to output
+
     bic.b   #SDA_PIN, &P3OUT        ; Take SDA to a LOW state
     call    #delay_12us
 
@@ -221,6 +228,8 @@ i2c_tx_ack:
 ; Now apparently theres actually 5 different situations where a NACK will be sent, this subroutine is the brute force approach.
 ; We keep SDA HIGH while the SCL enters its 9th cycle.
 i2c_tx_nack:
+
+    bis.b   #SDA_PIN, &I2C_DIR      ; Set SDA to output
 
     bis.b   #SDA_PIN, &P3OUT        ; Send SDA HIGH
     call    #delay_12us             ; give it time, son
@@ -298,7 +307,7 @@ i2c_tx_count:
         call #i2c_tx_byte
         call #i2c_rx_ack
         bit.b #Z, R14           ; Check ACK return
-        jz exit_i2c_tx_count   ; Exit if NACK
+        jz exit_i2c_tx_count    ; Exit if NACK
 
 send_count:
         
@@ -315,11 +324,90 @@ exit_i2c_tx_count:
         pop R6                  ; Restore R6
         ret
 
+
+;-- i2c_rx_byte --
+; This subroutine will receive a byte from the AD2 after we send a read request.
+i2c_rx_byte:
+
+        ; Fisrt thing we need to do is have the master send a slave address with R/W bit a 0 to signify a write.
+
+        mov.b   #68h, &tx_byte                  ; Last bit is a 0 should signify a write
+        call    #i2c_start                      ; Send START from master
+        call    #i2c_tx_byte                    ; Transmit slave address
+
+        call    #i2c_rx_ack                     ; Let slave send ack signal
+
+        ; Then we send what register address with a R/W bit a 1 (signify a read) that we want to read from the slave device.
+
+        mov.b   #0h, &tx_byte                  ; Last bit is a 1 should signify a read
+        call    #i2c_tx_byte                    ; Transmit register address
+
+        call    #i2c_rx_ack                     ; Let slave send ack signal
+
+        ; Once the slave deivces ack the two messages the master-device again sends a START condition with the same slave address
+        ; But signifying a read instead.
+
+        mov.b   #69h, &tx_byte                  ; Last bit is a 1 should signify a read
+        call    #i2c_stp                        ; Send STP from master
+        call    #i2c_start                      ; Send START from master
+        call    #i2c_tx_byte                    ; Transmit slave adress
+
+        call    #i2c_rx_ack                     ; Let slave send ack signal
+
+        ; Now the slave will have ack the read request, master releases SDA (SDA to LOW, pull-up resistor enabled) to receive data.
+        ; Once the master has received the amount of bytes expecting, the master will send a NACK to regain control of SDA and then send a STP
+        ; condition to end transmission of data.
+
+        push    R7
+        mov.w   #00h, R7
+
+        bis.b #SDA_PIN, &P3OUT          ; Input pull-up resister
+        bis.b #SDA_PIN, &P3REN          ; Enable resistor
+        bic.b #SDA_PIN, &I2C_DIR        ; Set SDA to input
+        call #delay_12us                ; Let slave set up ACK/NACK
+
+receiving:
+
+        bis.b #SCL_PIN, &P3OUT          ; Send SCL HIGH
+        call #delay_12us                ; SCL hold
+
+        bit.b   #SDA_PIN, &P3IN                 ; Test if SDA reeceived a 1 or 0
+        jnz      store_1
+
+store_0:
+        or.w    #0d, R7
+
+        jmp     end_store
+
+store_1:
+        or.w    #1d, R7
+
+end_store:
+
+        bic.b   #SCL_PIN, &P3OUT                ; Send SCL LOW
+        call    #delay_12us
+
+        dec     R15
+        jz      end_receive
+
+        rla     R7
+
+        jmp     receiving
+
+end_receive:
+
+        call    #i2c_tx_nack
+        call    #i2c_stp
+
+        mov.w   #8d, R15
+        pop     R7
+        ret
+
 ; --- Timer B0 ISR ---
 TB0_CCR0_ISR:
 
 	        xor.b #BIT0, &P1OUT		; Toggle LED1
-	        bic.w #CCIFG, &TB0CCTL0	; Clear interrupt flag
+	        bic.w #CCIFG, &TB0CCTL0	        ; Clear interrupt flag
 	        reti
 
 

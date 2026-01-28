@@ -24,8 +24,10 @@
             .data                         ; go to data memory (2000h)
             .retain                       ; keep this section, even if not used
 
-tx_byte:    .byte  0            ; Memory location where a byte destined for
-                                ; i2c transmit is stored  
+tx_byte:    .byte  0            ; Byte destined for i2c transmit is stored  
+rx_byte:    .byte  0            ; Byte from an i2c receive
+i2c_ack:    .byte  0            ; I2C ACK and NACK
+rx_byte_count: .byte 0          ; Number of bytes to read from slave
 
             ; Ensure current section gets linked
             .retain
@@ -51,7 +53,6 @@ init:
 
             ; -- Register Init --
             mov.w   #8d, R15        ; Counter register for Tx/Rx
-            mov.w   #0d, R14        ; Return register for ACK/NACK
 
             ; -- P1.0 (LED1 Heartbeat) --
             bic.b #BIT0, &P1SEL0    ; Set to Digital I/O
@@ -96,11 +97,9 @@ init:
             nop
 
 main:
-            ; this call will go through the program flow to transmit 3 bytes
-            ;call #i2c_tx_count
-            
-            ; this call will go through the program flow to receive a byte
-            call #i2c_rx_byte
+
+            mov.b #2, &rx_byte_count
+            call #i2c_rx_Nbytes
 
             call #delay_50ms
             
@@ -116,9 +115,12 @@ main:
 
 ; --- Delay 50 ms ---
 delay_50ms:
+
             push R4
 	    mov.w #04440h, R4	    ; Set delay counter (started at 30D1)
-delay_50ms_loop:
+            
+delay_50ms_loop
+
             dec.w R4				; 
             jnz delay_50ms_loop	    ; Repeat loop until R4 is 0 
             pop R4
@@ -177,18 +179,22 @@ i2c_tx_byte:
 
     bis.b   #SDA_PIN, &I2C_DIR           ; Set SDA to output
 
-msb_tst:
+msb_tst
+
         bit.b   #MSB_MASK, R4           ; tst MSB of R4
         jnz     sda_high                ; if MSB in R4 is not 0 go to sda_high
 
-sda_low:
+sda_low
+
         bic.b   #SDA_PIN, &P3OUT        ; set SDA to LOW
         jmp     tx_scl                  
 
-sda_high:
+sda_high
+
         bis.b   #SDA_PIN, &P3OUT        ; Set SDA to HIGH
 
-tx_scl:
+tx_scl
+
         call    #delay_12us             ; ensure SDA in LOW state
 
         bis.b   #SCL_PIN, &P3OUT        ; Set SCL to HIGH
@@ -197,7 +203,8 @@ tx_scl:
         bic.b   #SCL_PIN, &P3OUT        ; Set SCL to LOW
         call    #delay_12us             ; SCL hold delay
 
-next_bit:
+next_bit
+
         rlc     R4                      ; Rotate to the next MSB to send
         dec.w   R15
         jnz     msb_tst                  
@@ -253,9 +260,19 @@ i2c_rx_ack:
         bis.b #SCL_PIN, &P3OUT          ; Send SCL HIGH
         call #delay_12us                ; SCL hold
         
-        bit.b #SDA_PIN, &P3IN          ; Check for ACK/NACK
-        mov.w SR, R14                   ; Get Zero flag from SR
-        and.w #Z, R14   
+        bit.b #SDA_PIN, &P3IN           ; Check for ACK/NACK                  
+        jz store_ack
+
+store_nack
+
+        mov.b #1, &i2c_ack              ; A 1 indicates a NACK
+        jmp end_rx_ack
+
+store_ack
+
+        mov.b #0, &i2c_ack              ; A 0 indicates an ACK
+
+end_rx_ack
 
         call #delay_12us                ; SCL hold
         bic.b #SCL_PIN, &P3OUT          ; Send SCL LOW
@@ -264,11 +281,27 @@ i2c_rx_ack:
 
         ret
 
+; -- i2c_repeated_start --
+; Sends a repeated start condition
+i2c_repeated_start:
 
-;-- i2c_Nbytes --
-; This subroutine will send multiple bytes with an ACK after each address, we will be using previously made subroutines, 
-;so look at those for the details of how it all works
-i2c_Nbytes:
+        bis.b #SDA_PIN, &I2C_DIR        ; Set SDA to output
+
+        bis.b #SDA_PIN, &P3OUT          ; Send SDA high
+        call #delay_12us
+
+        bis.b #SCL_PIN, &P3OUT          ; Send SCL high
+        call #delay_12us      
+
+        bic.b #SDA_PIN, &P3OUT          ; Send SDA low
+        call #delay_12us
+
+        bic.b #SCL_PIN, &P3OUT          ; Send SCL low
+        ret
+
+;-- i2c_tx_Nbytes --
+; This subroutine will send multiple bytes and receive an ACK after each. 
+i2c_tx_Nbytes:
 
     ; Generate START
     call #i2c_start
@@ -306,10 +339,8 @@ i2c_tx_count:
         mov.b #68h, &tx_byte     ; Addr 0x34 | Read
         call #i2c_tx_byte
         call #i2c_rx_ack
-        bit.b #Z, R14           ; Check ACK return
-        jz exit_i2c_tx_count    ; Exit if NACK
 
-send_count:
+send_count
         
         mov.w R6, &tx_byte      ; Copy counter val to i2c Tx buffer
         call #i2c_tx_byte       ; Tx i2c buffer
@@ -319,91 +350,116 @@ send_count:
         cmp.w #10, R6           ; Count 0 thru 9
         jne send_count          ; Send next counter val
 
-exit_i2c_tx_count:
+exit_i2c_tx_count
+
         call #i2c_stp
         pop R6                  ; Restore R6
         ret
 
 
 ;-- i2c_rx_byte --
-; This subroutine will receive a byte from the AD2 after we send a read request.
+; This subroutine will receive a byte from the AD2 after we 
+; have A:READY sent a read request.
 i2c_rx_byte:
 
-        ; Fisrt thing we need to do is have the master send a slave address with R/W bit a 0 to signify a write.
-
-        mov.b   #68h, &tx_byte                  ; Last bit is a 0 should signify a write
-        call    #i2c_start                      ; Send START from master
-        call    #i2c_tx_byte                    ; Transmit slave address
-
-        call    #i2c_rx_ack                     ; Let slave send ack signal
-
-        ; Then we send what register address with a R/W bit a 1 (signify a read) that we want to read from the slave device.
-
-        mov.b   #0h, &tx_byte                  ; Last bit is a 1 should signify a read
-        call    #i2c_tx_byte                    ; Transmit register address
-
-        call    #i2c_rx_ack                     ; Let slave send ack signal
-
-        ; Once the slave deivces ack the two messages the master-device again sends a START condition with the same slave address
-        ; But signifying a read instead.
-
-        mov.b   #69h, &tx_byte                  ; Last bit is a 1 should signify a read
-        call    #i2c_stp                        ; Send STP from master
-        call    #i2c_start                      ; Send START from master
-        call    #i2c_tx_byte                    ; Transmit slave adress
-
-        call    #i2c_rx_ack                     ; Let slave send ack signal
-
-        ; Now the slave will have ack the read request, master releases SDA (SDA to LOW, pull-up resistor enabled) to receive data.
-        ; Once the master has received the amount of bytes expecting, the master will send a NACK to regain control of SDA and then send a STP
-        ; condition to end transmission of data.
-
         push    R7
-        mov.w   #00h, R7
+        mov.w   #00h, R7                ; Use R7 for I2C Rx buffer
 
         bis.b #SDA_PIN, &P3OUT          ; Input pull-up resister
         bis.b #SDA_PIN, &P3REN          ; Enable resistor
         bic.b #SDA_PIN, &I2C_DIR        ; Set SDA to input
         call #delay_12us                ; Let slave set up ACK/NACK
 
-receiving:
+receiving
 
         bis.b #SCL_PIN, &P3OUT          ; Send SCL HIGH
         call #delay_12us                ; SCL hold
 
-        bit.b   #SDA_PIN, &P3IN                 ; Test if SDA reeceived a 1 or 0
-        jnz      store_1
-
-store_0:
-        or.w    #0d, R7
-
+        bit.b   #SDA_PIN, &P3IN         ; Test if SDA reeceived a 1 or 0
+        jnz     store_1                 ; If it was a 1, store a 1 in the reg
+                                        ; If it was a zero, continue to storing a 0
+store_0
+        or.w    #0d, R7                 ; Set the LSb to 0 (last received)
         jmp     end_store
 
-store_1:
-        or.w    #1d, R7
+store_1
+        or.w    #1d, R7                 ; Set the LSb to 1 (last received)
 
-end_store:
+end_store
 
-        bic.b   #SCL_PIN, &P3OUT                ; Send SCL LOW
+        bic.b   #SCL_PIN, &P3OUT        ; Send SCL LOW
         call    #delay_12us
 
-        dec     R15
-        jz      end_receive
+        dec     R15                     ; Rx 8 bits       
+        jz      end_receive             ; Once counter is 0, stop receiving
 
-        rla     R7
+        rla     R7                      ; Shift received bit to prepare for next one
+        jmp     receiving               ; Receive next bit
 
-        jmp     receiving
+end_receive
 
-end_receive:
+        mov.b R7, &rx_byte              ; Save receieved byte
+        mov.w #8d, R15                ; Reset Tx/Rx counter
+        pop   R7                      ; Restore R7
+        ret
 
-        call    #i2c_tx_nack
-        call    #i2c_stp
 
-        mov.w   #8d, R15
-        pop     R7
+; -- i2c_rx_Nbytes --
+; Reads the # of bytes specified in rx_byte_count from a slave
+; The value is constantly overwritten in rx_byte for now.
+i2c_rx_Nbytes:
+
+        push R8
+        mov.w #0, R8
+        mov.b &rx_byte_count, R8                ; Number of sequential bytes to read
+
+        call    #i2c_start                      ; Send START from master
+
+        ; Tx Address and specify a write
+        mov.b   #68h, &tx_byte                  ; Slave addr 0x34 | Write
+        call    #i2c_tx_byte                    ; Transmit slave address
+        call    #i2c_rx_ack                     ; Let slave send ack signal
+        cmp.b #0, &i2c_ack                      ; Check ACK/NACK
+        jnz exit_rx_Nbytes                      ; Exit if NACK
+
+        ; Tx Slave register pointer
+        mov.b   #1h, &tx_byte                   ; Set slave register pointer to 0
+        call    #i2c_tx_byte                    ; Transmit register address
+        call    #i2c_rx_ack                     ; Let slave send ack signal
+        cmp.b #0, &i2c_ack                      ; Check ACK/NACK
+        jnz exit_rx_Nbytes                      ; Exit if NACK
+
+        ; Start & stop before switching to reading
+        call    #i2c_repeated_start             ; Switch from WR to RD
+
+        ; Tx Address and specify a read
+        mov.b   #69h, &tx_byte                  ; Slave addr 0x34 | Read
+        call    #i2c_tx_byte                    ; Transmit slave adress
+        call    #i2c_rx_ack                     ; Let slave send ack signal
+        cmp.b #0, &i2c_ack                      ; Check ACK/NACK
+        jnz exit_rx_Nbytes                      ; Exit if NACK
+
+rx_loop
+        ; Receive data from slave
+        call #i2c_rx_byte                       ; Receive byte (stored in rx_byte)
+        dec.w R8                                ; Rx num of bytes specified in R8
+        jz done_receiving_bytes                 ; Received all bytes
+
+        call #i2c_tx_ack                        ; Tx ACK to request next byte from slave
+        jmp rx_loop
+
+done_receiving_bytes
+
+        call    #i2c_tx_nack                    ; Tx NACK to stop slave from sending
+
+exit_rx_Nbytes
+
+        call    #i2c_stp                        ; End transmission
+        pop R8
         ret
 
 ; --- Timer B0 ISR ---
+; This creates a heartbeat LED
 TB0_CCR0_ISR:
 
 	        xor.b #BIT0, &P1OUT		; Toggle LED1

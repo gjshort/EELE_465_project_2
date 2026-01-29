@@ -96,9 +96,21 @@ init:
             bis.w #GIE, SR                  ; Enable global interrupts
             nop
 
+            call #i2c_start
+            mov.b #0DEh, &tx_byte           ; Addr 0x6F | WR
+            call #i2c_tx_byte
+            call #i2c_rx_ack                ; Let RTC ACK
+            mov.b #0h, &tx_byte             ; Writing to seconds reg.
+            call #i2c_tx_byte
+            call #i2c_rx_ack                ; Let RTC ACK
+            mov.b #080h, &tx_byte           ; Set oscillator enable bit
+            call #i2c_tx_byte
+            call #i2c_rx_ack
+            call #i2c_stp
+
 main:
 
-            mov.b #4, &rx_byte_count
+            mov.b #1, &rx_byte_count
             call #i2c_rx_Nbytes
 
             call #delay_50ms
@@ -416,14 +428,14 @@ i2c_rx_Nbytes:
         call    #i2c_start                      ; Send START from master
 
         ; Tx Address and specify a write
-        mov.b   #68h, &tx_byte                  ; Slave addr 0x34 | Write
+        mov.b   #0DEh, &tx_byte                  ; Slave addr 0x34 | Write
         call    #i2c_tx_byte                    ; Transmit slave address
         call    #i2c_rx_ack                     ; Let slave send ack signal
         cmp.b #0, &i2c_ack                      ; Check ACK/NACK
         jnz exit_rx_Nbytes                      ; Exit if NACK
 
         ; Tx Slave register pointer
-        mov.b   #1h, &tx_byte                   ; Set slave register pointer to 0
+        mov.b   #0h, &tx_byte                   ; Set slave register pointer to 0
         call    #i2c_tx_byte                    ; Transmit register address
         call    #i2c_rx_ack                     ; Let slave send ack signal
         cmp.b #0, &i2c_ack                      ; Check ACK/NACK
@@ -433,7 +445,7 @@ i2c_rx_Nbytes:
         call    #i2c_repeated_start             ; Switch from WR to RD
 
         ; Tx Address and specify a read
-        mov.b   #69h, &tx_byte                  ; Slave addr 0x34 | Read
+        mov.b   #0DFh, &tx_byte                  ; Slave addr 0x34 | Read
         call    #i2c_tx_byte                    ; Transmit slave adress
         call    #i2c_rx_ack                     ; Let slave send ack signal
         cmp.b #0, &i2c_ack                      ; Check ACK/NACK

@@ -45,6 +45,12 @@ RESET       mov.w   #__STACK_END,SP
 SDA_PIN .equ BIT0
 SCL_PIN .equ BIT2
 I2C_DIR .equ P3DIR
+RTC_WR  .equ 0DEh      ; RTC Addr 0x6F | WR (0)
+RTC_RD  .equ 0DFh      ; RTC Addr 0x6F | RD (1)
+RTC_OSC_EN  .equ 080h  ; RTC oscillator enable bit in seconds reg
+RTC_SEC_REG .equ 00h   ; RTC seconds register
+RTC_MIN_REG .equ 01h   ; RTC minutes register
+RTC_HR_REG  .equ 02h   ; RTC hours register
 
 MSB_MASK .equ 0x80
 
@@ -96,17 +102,7 @@ init:
             bis.w #GIE, SR                  ; Enable global interrupts
             nop
 
-            call #i2c_start
-            mov.b #0DEh, &tx_byte           ; Addr 0x6F | WR
-            call #i2c_tx_byte
-            call #i2c_rx_ack                ; Let RTC ACK
-            mov.b #0h, &tx_byte             ; Writing to seconds reg.
-            call #i2c_tx_byte
-            call #i2c_rx_ack                ; Let RTC ACK
-            mov.b #080h, &tx_byte           ; Set oscillator enable bit
-            call #i2c_tx_byte
-            call #i2c_rx_ack
-            call #i2c_stp
+            call #rtc_init                  ; Init the RTC
 
 main:
 
@@ -144,6 +140,37 @@ delay_50ms_loop
 ; GPIO pins is roughly 12 us.
 delay_12us:
             ret
+
+; -- RTC Init --
+; Sets the oscillator enable bit in the RTC's seconds reg
+rtc_init:
+
+        call #i2c_start
+
+        ; Send RTC Address with write bit
+        mov.b #RTC_WR, &tx_byte
+        call #i2c_tx_byte
+        call #i2c_rx_ack   
+        cmp.b #0, &i2c_ack              ; Check ACK/NACK
+        jnz exit_rtc_init               ; Exit if NACK           
+
+        ; Set RTC register pointer
+        mov.b #RTC_SEC_REG, &tx_byte    ; Writing to seconds reg.
+        call #i2c_tx_byte
+        call #i2c_rx_ack   
+        cmp.b #0, &i2c_ack              ; Check ACK/NACK
+        jnz exit_rtc_init               ; Exit if NACK                
+
+        ; Write to RTC seconds register
+        mov.b #RTC_OSC_EN, &tx_byte     ; Set oscillator enable bit
+        call #i2c_tx_byte
+        call #i2c_rx_ack
+        
+exit_rtc_init
+
+        call #i2c_stp
+
+        ret
 
 ; -- I2C Start --
 ; Generates the start condition for I2C

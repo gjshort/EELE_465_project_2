@@ -98,7 +98,7 @@ init:
 
 main:
 
-            mov.b #2, &rx_byte_count
+            mov.b #4, &rx_byte_count
             call #i2c_rx_Nbytes
 
             call #delay_50ms

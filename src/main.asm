@@ -27,6 +27,7 @@
 tx_byte:    .byte  0            ; Byte destined for i2c transmit is stored  
 rx_byte:    .byte  0            ; Byte from an i2c receive
 i2c_ack:    .byte  0            ; I2C ACK and NACK
+rtc_reg:    .byte  0            ; Register pointer for RTC
 rx_byte_count: .byte 0          ; Number of bytes to read from slave
 
             ; Ensure current section gets linked
@@ -106,8 +107,8 @@ init:
 
 main:
 
-            mov.b #1, &rx_byte_count
-            call #i2c_rx_Nbytes
+            mov.b #RTC_SEC_REG, &rtc_reg    
+            call #rtc_read_register
 
             call #delay_50ms
             
@@ -155,7 +156,7 @@ rtc_init:
         jnz exit_rtc_init               ; Exit if NACK           
 
         ; Set RTC register pointer
-        mov.b #RTC_SEC_REG, &tx_byte    ; Writing to seconds reg.
+        mov.b #RTC_SEC_REG, &tx_byte    ; Writing to seconds register
         call #i2c_tx_byte
         call #i2c_rx_ack   
         cmp.b #0, &i2c_ack              ; Check ACK/NACK
@@ -167,6 +168,47 @@ rtc_init:
         call #i2c_rx_ack
         
 exit_rtc_init
+
+        call #i2c_stp
+
+        ret
+
+; -- RTC Read Register --
+; Reads the register specified in 'rtc_reg'.
+; The user must write to that location before calling this.
+rtc_read_register:
+
+        call #i2c_start
+
+        ; Send RTC Address with write bit
+        mov.b #RTC_WR, &tx_byte
+        call #i2c_tx_byte
+        call #i2c_rx_ack   
+        cmp.b #0, &i2c_ack              ; Check ACK/NACK
+        jnz exit_rtc_read               ; Exit if NACK           
+
+        ; Set RTC register pointer
+        mov.b &rtc_reg, &tx_byte        ; Writing to seconds reg.
+        call #i2c_tx_byte
+        call #i2c_rx_ack   
+        cmp.b #0, &i2c_ack              ; Check ACK/NACK
+        jnz exit_rtc_read               ; Exit if NACK                
+
+        ; Start & stop before switching to reading
+        call #i2c_repeated_start        ; Switch from WR to RD
+
+        ; Tx Address and specify a read
+        mov.b #RTC_RD, &tx_byte                 
+        call #i2c_tx_byte                       
+        call #i2c_rx_ack                        
+        cmp.b #0, &i2c_ack              ; Check ACK/NACK
+        jnz exit_rtc_read               ; Exit if NACK
+
+        ; Read from RTC and end transmission
+        call #i2c_rx_byte               ; Receive byte (stored in rx_byte)
+        call #i2c_tx_nack               ; Stop asking for data
+      
+exit_rtc_read
 
         call #i2c_stp
 

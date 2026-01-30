@@ -21,13 +21,14 @@
 ; Data Allocation
 ;--------------------------------------------------------------------------------
 
-            .data                         ; go to data memory (2000h)
-            .retain                       ; keep this section, even if not used
+            .data                       ; go to data memory (2000h)
+            .retain                     ; keep this section, even if not used
 
-tx_byte:    .byte  0            ; Byte destined for i2c transmit is stored  
-rx_byte:    .byte  0            ; Byte from an i2c receive
-i2c_ack:    .byte  0            ; I2C ACK and NACK
-rx_byte_count: .byte 0          ; Number of bytes to read from slave
+tx_byte:        .byte  0                ; Byte destined for i2c transmit is stored  
+rx_byte:        .byte  0                ; Byte from an i2c receive
+i2c_ack:        .byte  0                ; I2C ACK and NACK
+rx_byte_count:  .byte  0                ; Number of bytes to read from slave
+rx_read_space:  .space 32               ; Space allocated for bytes to be stored
 
             ; Ensure current section gets linked
             .retain
@@ -45,7 +46,6 @@ RESET       mov.w   #__STACK_END,SP
 SDA_PIN .equ BIT0
 SCL_PIN .equ BIT2
 I2C_DIR .equ P3DIR
-
 MSB_MASK .equ 0x80
 
 
@@ -98,8 +98,8 @@ init:
 
 main:
 
-            mov.b #2, &rx_byte_count
-            call #i2c_rx_Nbytes
+            mov.b #32, &rx_byte_count           ; change this based on how many bytes you want to receive, risking data overwrite
+            call #i2c_rx_generic                ; go to subroutine to start importing data to memory
 
             call #delay_50ms
             
@@ -399,8 +399,10 @@ end_store
 end_receive
 
         mov.b R7, &rx_byte              ; Save receieved byte
-        mov.w #8d, R15                ; Reset Tx/Rx counter
-        pop   R7                      ; Restore R7
+        mov.b &rx_byte, 0(R12)          ; Take saved byte send to location in memory
+        inc.w R12                       ; Point R12 to next spot in memory
+        mov.w #8d, R15                  ; Reset Tx/Rx counter
+        pop   R7                        ; Restore R7
         ret
 
 
@@ -456,6 +458,21 @@ exit_rx_Nbytes
 
         call    #i2c_stp                        ; End transmission
         pop R8
+        ret
+
+;-- Generic Rx Routine --
+; This will handle arbitrary byte read and storage
+i2c_rx_generic:
+
+        ; Init
+        push    R12                             ; save R12 data
+        mov.w   #rx_read_space, R12             ; put the first word in memory value reserved to read bytes in R12
+
+        ; Call i2c_rx_byte to read and store bytes in memory
+        call    #i2c_rx_Nbytes
+
+        ; Return to main
+        pop     R12                             ; restore R12
         ret
 
 ; --- Timer B0 ISR ---

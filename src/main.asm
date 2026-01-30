@@ -27,6 +27,8 @@
 tx_byte:        .byte  0                ; Byte destined for i2c transmit is stored  
 rx_byte:        .byte  0                ; Byte from an i2c receive
 i2c_ack:        .byte  0                ; I2C ACK and NACK
+i2c_addr:       .byte 0                 ; I2C peripheral address for generic read/write
+i2c_reg:        .byte 0                 ; I2C peripheral register address for generic read/write
 rx_byte_count:  .byte  0                ; Number of bytes to read from slave
 tx_byte_start:  .byte  67                ; Starting send byte
 rx_read_space:  .space 32               ; Space allocated for bytes to be stored
@@ -100,12 +102,14 @@ init:
 main:
 
             ; Potentially f*ck yo shi program flow (generic read routine)
-            ;mov.b #32, &rx_byte_count            ; change this based on how many bytes you want to start to receive,
+            mov.b #32, &rx_byte_count            ; change this based on how many bytes you want to start to receive,
             ;inc.b &rx_byte_count                ; now lets say you really wanna brick yo shit, just uncomment this, comment the above line and it will run forever :)
-            ;call #i2c_rx_generic                ; go to subroutine to start importing data to memory
+            mov.b #034h, &i2c_addr
+            mov.b #00h, &i2c_reg
+            call #i2c_rx_generic                ; go to subroutine to start importing data to memory
 
             ; Send infinite bytes really fast (generic write routine)
-            call #i2c_tx_generic
+            ;call #i2c_tx_generic
 
             call #delay_50ms
             
@@ -364,8 +368,10 @@ exit_i2c_tx_count
 
 
 ;-- i2c_rx_byte --
-; This subroutine will receive a byte from the AD2 after we 
-; have A:READY sent a read request.
+; This subroutine will receive a byte from a slave
+; and storing the first byte at 'rx_read_space'. 
+; Any subsequent bytes received during a multi-byte
+; read will be stored sequentially afterwards.
 i2c_rx_byte:
 
         push    R7
@@ -414,24 +420,30 @@ end_receive
 
 ; -- i2c_rx_Nbytes --
 ; Reads the # of bytes specified in rx_byte_count from a slave
-; The value is constantly overwritten in rx_byte for now.
+; The values are sequentially stored starting at 'rx_read_space'.
 i2c_rx_Nbytes:
 
         push R8
+        push R9
         mov.w #0, R8
         mov.b &rx_byte_count, R8                ; Number of sequential bytes to read
+        
+        mov.w #0h, R9
+        mov.b &i2c_addr, R9                     ; Copy address of slave to R9
+        rla R9                                  ; Prepare address for addition of R/W bit
 
         call    #i2c_start                      ; Send START from master
 
         ; Tx Address and specify a write
-        mov.b   #68h, &tx_byte                  ; Slave addr 0x34 | Write
+        bic.b   #BIT0, R9                       ; Set last address bit to WR
+        mov.b   R9, &tx_byte                    ; Slave address to tx buffer
         call    #i2c_tx_byte                    ; Transmit slave address
         call    #i2c_rx_ack                     ; Let slave send ack signal
         cmp.b #0, &i2c_ack                      ; Check ACK/NACK
         jnz exit_rx_Nbytes                      ; Exit if NACK
 
         ; Tx Slave register pointer
-        mov.b   #1h, &tx_byte                   ; Set slave register pointer to 0
+        mov.b   &i2c_reg, &tx_byte                   ; Set slave register pointer to 0
         call    #i2c_tx_byte                    ; Transmit register address
         call    #i2c_rx_ack                     ; Let slave send ack signal
         cmp.b #0, &i2c_ack                      ; Check ACK/NACK
@@ -441,7 +453,8 @@ i2c_rx_Nbytes:
         call    #i2c_repeated_start             ; Switch from WR to RD
 
         ; Tx Address and specify a read
-        mov.b   #69h, &tx_byte                  ; Slave addr 0x34 | Read
+        bis.b   #BIT0, R9                       ; Set last address but to RD
+        mov.b   R9, &tx_byte                    ; Slave address to tx buffer
         call    #i2c_tx_byte                    ; Transmit slave adress
         call    #i2c_rx_ack                     ; Let slave send ack signal
         cmp.b #0, &i2c_ack                      ; Check ACK/NACK
@@ -463,6 +476,7 @@ done_receiving_bytes
 exit_rx_Nbytes
 
         call    #i2c_stp                        ; End transmission
+        pop R9
         pop R8
         ret
 
@@ -471,7 +485,10 @@ exit_rx_Nbytes
 ;----------------------------------------------------------------------
 
 ;-- Generic Rx Routine --
-; This will handle arbitrary byte read and storage
+; This will handle arbitrary byte read and storage.
+; User must specify the slave address in 'i2c_addr' and
+; the register pointer in 'i2c_reg' before calling
+; this function
 i2c_rx_generic:
 
         ; Init

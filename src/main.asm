@@ -100,7 +100,7 @@ main:
 
             ; Potentially f*ck yo shi program flow (generic read routine)
             mov.b #32, &rx_byte_count            ; change this based on how many bytes you want to start to receive,
-            ;inc.b &rx_byte_count                ; now lets say you really wanna brick yo shit, just uncomment this and it will run forever :)
+            ;inc.b &rx_byte_count                ; now lets say you really wanna brick yo shit, just uncomment this, comment the above line and it will run forever :)
             call #i2c_rx_generic                ; go to subroutine to start importing data to memory
 
             call #delay_50ms

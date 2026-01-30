@@ -28,6 +28,7 @@ tx_byte:        .byte  0                ; Byte destined for i2c transmit is stor
 rx_byte:        .byte  0                ; Byte from an i2c receive
 i2c_ack:        .byte  0                ; I2C ACK and NACK
 rx_byte_count:  .byte  0                ; Number of bytes to read from slave
+tx_byte_start:  .byte  67                ; Starting send byte
 rx_read_space:  .space 32               ; Space allocated for bytes to be stored
 
             ; Ensure current section gets linked
@@ -99,9 +100,12 @@ init:
 main:
 
             ; Potentially f*ck yo shi program flow (generic read routine)
-            mov.b #32, &rx_byte_count            ; change this based on how many bytes you want to start to receive,
+            ;mov.b #32, &rx_byte_count            ; change this based on how many bytes you want to start to receive,
             ;inc.b &rx_byte_count                ; now lets say you really wanna brick yo shit, just uncomment this, comment the above line and it will run forever :)
-            call #i2c_rx_generic                ; go to subroutine to start importing data to memory
+            ;call #i2c_rx_generic                ; go to subroutine to start importing data to memory
+
+            ; Send infinite bytes really fast (generic write routine)
+            call #i2c_tx_generic
 
             call #delay_50ms
             
@@ -309,9 +313,9 @@ i2c_tx_Nbytes:
     call #i2c_start
 
     ; Transmits 1st byte, send ack, then send repeated start
-    mov.b   #68h, &tx_byte
+    mov.b   #69h, &tx_byte
     call    #i2c_tx_byte
-    call    #i2c_rx_ack               ; Okay so we did need NACK, maybe? My thought was to froce a nack so it can send a repeat start condition for next byte.
+    call    #i2c_rx_ack               
 
     ; Transmits 2nd byte, ..^
     mov.b   #67h, &tx_byte
@@ -484,6 +488,17 @@ i2c_rx_generic:
 ;-- Generic Tx Routine --
 ; This will handle abritrary write
 i2c_tx_generic:
+
+        inc.b   &tx_byte_start                  ; increment byte count
+        mov.b   &tx_byte_start, &tx_byte        ; move to tx_byte
+
+        call    #i2c_start                      ; start transaction
+
+        call    #i2c_tx_byte                    ; send byte
+        call    #i2c_rx_ack                     ; let slave ack received byte
+        call    #i2c_stp                        ; send stop
+
+        ret                                     ; go back to main
 
 ;---------------- END GENERIC SUBROUTINES -----------------------------
 

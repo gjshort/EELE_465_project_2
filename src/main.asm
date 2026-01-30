@@ -99,7 +99,6 @@ init:
 
 main:
 
-<<<<<<< HEAD
             ; Potentially f*ck yo shi program flow (generic read routine)
             ;mov.b #32, &rx_byte_count            ; change this based on how many bytes you want to start to receive,
             ;inc.b &rx_byte_count                ; now lets say you really wanna brick yo shit, just uncomment this, comment the above line and it will run forever :)
@@ -107,10 +106,6 @@ main:
 
             ; Send infinite bytes really fast (generic write routine)
             call #i2c_tx_generic
-=======
-            mov.b #4, &rx_byte_count
-            call #i2c_rx_Nbytes
->>>>>>> e45b779 (Confirm multi-byte read operation)
 
             call #delay_50ms
             

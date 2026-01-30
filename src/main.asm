@@ -98,7 +98,9 @@ init:
 
 main:
 
-            mov.b #32, &rx_byte_count           ; change this based on how many bytes you want to receive, risking data overwrite
+            ; Potentially f*ck yo shi program flow (generic read routine)
+            mov.b #32, &rx_byte_count            ; change this based on how many bytes you want to start to receive,
+            ;inc.b &rx_byte_count                ; now lets say you really wanna brick yo shit, just uncomment this and it will run forever :)
             call #i2c_rx_generic                ; go to subroutine to start importing data to memory
 
             call #delay_50ms
@@ -460,6 +462,10 @@ exit_rx_Nbytes
         pop R8
         ret
 
+;----------------------------------------------------------------------
+; Generic Subroutines for Mastery
+;----------------------------------------------------------------------
+
 ;-- Generic Rx Routine --
 ; This will handle arbitrary byte read and storage
 i2c_rx_generic:
@@ -474,6 +480,12 @@ i2c_rx_generic:
         ; Return to main
         pop     R12                             ; restore R12
         ret
+
+;-- Generic Tx Routine --
+; This will handle abritrary write
+i2c_tx_generic:
+
+;---------------- END GENERIC SUBROUTINES -----------------------------
 
 ; --- Timer B0 ISR ---
 ; This creates a heartbeat LED

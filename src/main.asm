@@ -28,6 +28,7 @@ tx_byte:    .byte  0            ; Byte destined for i2c transmit is stored
 rx_byte:    .byte  0            ; Byte from an i2c receive
 i2c_ack:    .byte  0            ; I2C ACK and NACK
 rtc_reg:    .byte  0            ; Register pointer for RTC
+rtc_tx_data:   .byte 0          ; Data to be sent to the RTC
 rx_byte_count: .byte 0          ; Number of bytes to read from slave
 
             ; Ensure current section gets linked
@@ -103,7 +104,11 @@ init:
             bis.w #GIE, SR                  ; Enable global interrupts
             nop
 
-            call #rtc_init                  ; Init the RTC
+            ; Init the RTC by setting the oscillator enable
+            ; bit in the seconds register
+            mov.b #RTC_SEC_REG, &rtc_reg
+            mov.b #RTC_OSC_EN, &rtc_tx_data 
+            call #rtc_write_register        
 
 main:
 
@@ -142,9 +147,11 @@ delay_50ms_loop
 delay_12us:
             ret
 
-; -- RTC Init --
-; Sets the oscillator enable bit in the RTC's seconds reg
-rtc_init:
+; -- rtc_write_register --
+; Writes the data stored in 'rtc_tx_data' to the
+; RTC register specified in 'rtc_reg'. These locations
+; must be updated prior to calling this function.
+rtc_write_register:
 
         call #i2c_start
 
@@ -153,21 +160,21 @@ rtc_init:
         call #i2c_tx_byte
         call #i2c_rx_ack   
         cmp.b #0, &i2c_ack              ; Check ACK/NACK
-        jnz exit_rtc_init               ; Exit if NACK           
+        jnz exit_rtc_write              ; Exit if NACK           
 
         ; Set RTC register pointer
-        mov.b #RTC_SEC_REG, &tx_byte    ; Writing to seconds register
+        mov.b &rtc_reg, &tx_byte        ; Writing to seconds register
         call #i2c_tx_byte
         call #i2c_rx_ack   
         cmp.b #0, &i2c_ack              ; Check ACK/NACK
-        jnz exit_rtc_init               ; Exit if NACK                
+        jnz exit_rtc_write              ; Exit if NACK                
 
         ; Write to RTC seconds register
-        mov.b #RTC_OSC_EN, &tx_byte     ; Set oscillator enable bit
+        mov.b &rtc_tx_data, &tx_byte    ; Pack Tx buffer with data
         call #i2c_tx_byte
         call #i2c_rx_ack
         
-exit_rtc_init
+exit_rtc_write
 
         call #i2c_stp
 

@@ -24,13 +24,13 @@
             .data                       ; go to data memory (2000h)
             .retain                     ; keep this section, even if not used
 
-tx_byte:        .byte  0                ; Byte destined for i2c transmit is stored  
-rx_byte:        .byte  0                ; Byte from an i2c receive
-i2c_ack:        .byte  0                ; I2C ACK and NACK
-i2c_addr:       .byte 0                 ; I2C peripheral address for generic read/write
-i2c_reg:        .byte 0                 ; I2C peripheral register address for generic read/write
-rx_byte_count:  .byte  0                ; Number of bytes to read from slave
-tx_byte_start:  .byte  67                ; Starting send byte
+tx_byte:        .byte   0                ; Byte destined for i2c transmit is stored 
+rx_byte:        .byte   0                ; Byte from an i2c receive
+i2c_ack:        .byte   0                ; I2C ACK and NACK
+i2c_addr:       .byte   0                ; I2C peripheral address for generic read/write
+i2c_reg:        .byte   0                ; I2C peripheral register address for generic read/write
+rx_byte_count:  .byte   0                ; Number of bytes to read from slave
+tx_byte_count:  .byte   0
 rx_read_space:  .space 32               ; Space allocated for bytes to be stored
 
             ; Ensure current section gets linked
@@ -46,10 +46,10 @@ RESET       mov.w   #__STACK_END,SP
 ; Macros
 ;-------------------------------------------------------------------------------
 
-SDA_PIN .equ BIT0
-SCL_PIN .equ BIT2
-I2C_DIR .equ P3DIR
-MSB_MASK .equ 0x80
+SDA_PIN         .equ BIT0
+SCL_PIN         .equ BIT2
+I2C_DIR         .equ P3DIR
+MSB_MASK        .equ 0x80
 
 
 init:
@@ -102,14 +102,16 @@ init:
 main:
 
             ; Potentially f*ck yo shi program flow (generic read routine)
-            mov.b #32, &rx_byte_count            ; change this based on how many bytes you want to start to receive,
+            ;mov.b #32, &rx_byte_count           ; change this based on how many bytes you want to start to receive,
             ;inc.b &rx_byte_count                ; now lets say you really wanna brick yo shit, just uncomment this, comment the above line and it will run forever :)
-            mov.b #034h, &i2c_addr
-            mov.b #00h, &i2c_reg
-            call #i2c_rx_generic                ; go to subroutine to start importing data to memory
+            ;mov.b #034h, &i2c_addr
+            ;mov.b #00h, &i2c_reg
+            ;call #i2c_rx_generic                ; go to subroutine to start importing data to memory
 
-            ; Send infinite bytes really fast (generic write routine)
-            ;call #i2c_tx_generic
+            ; Send specified number of bytes to slave (generix write routine)
+            mov.w #10d, &tx_byte_count          ; declare how many bytes to write
+            mov.w #2045h, R13                   ; declare where 1st byte in memory is, move to R13 for pointer
+            call #i2c_tx_generic
 
             call #delay_50ms
             
@@ -503,18 +505,30 @@ i2c_rx_generic:
         ret
 
 ;-- Generic Tx Routine --
-; This will handle abritrary write
+; This will handle abritrary write to slave, msut specify how many bytes to send and where first byte is located in memory
+; before calling
 i2c_tx_generic:
 
-        inc.b   &tx_byte_start                  ; increment byte count
-        mov.b   &tx_byte_start, &tx_byte        ; move to tx_byte
+        mov.w   tx_byte_count, R14
+
+continue_tx_generic
+        mov.b   @R13+, &tx_byte                ; move byte to be sent
+        
+        ;bit.b   #0d,   R14                      ; see if we transmitted all the bytes
+        ;jnz     exit_tx_generic                 ; if so exit
 
         call    #i2c_start                      ; start transaction
-
         call    #i2c_tx_byte                    ; send byte
         call    #i2c_rx_ack                     ; let slave ack received byte
-        call    #i2c_stp                        ; send stop
+        ;call    #i2c_stp                        ; send stop
 
+        dec     R14                             ; decrement tx_byte_count by 1
+        jz      exit_tx_generic                 ; if R14 == 0 leave routine
+        jmp     continue_tx_generic             ; start next byte transmit
+exit_tx_generic
+        mov.b   tx_byte_count, R14
+        call    #i2c_stp                        ; send stop
+        
         ret                                     ; go back to main
 
 ;---------------- END GENERIC SUBROUTINES -----------------------------

@@ -112,13 +112,21 @@ init:
             nop
 
             ; -- Init the RTC --
+
+            ; Hrs reg: 10, 24 hr time
+            mov.b #RTC_HR_REG, &i2c_reg
+            mov.b #010h, &rtc_tx_data           
+            call #rtc_write_register
+
+            ; Mins reg: 00
+            mov.b #RTC_MIN_REG, &i2c_reg
+            mov.b #00h, &rtc_tx_data           
+            call #rtc_write_register
+            
+            ; Secs reg: 00, oscilattor enable
             mov.b #RTC_SEC_REG, &i2c_reg
             mov.b #RTC_OSC_EN, &rtc_tx_data     ; Enable the oscillator (seconds register)
             call #rtc_write_register       
-
-            mov.b #RTC_HR_REG, &i2c_reg
-            mov.b #RTC_24HR_EN, &rtc_tx_data    ; Enable 24 Hr time (hours register)
-            call #rtc_write_register
 
 main:
 

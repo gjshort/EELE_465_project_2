@@ -28,6 +28,9 @@ tx_byte:    .byte  0            ; Byte destined for i2c transmit is stored
 rx_byte:    .byte  0            ; Byte from an i2c receive
 i2c_ack:    .byte  0            ; I2C ACK and NACK
 rtc_tx_data:   .byte 0          ; Data to be sent to the RTC
+rtc_secs:      .byte 0          ; Seconds from the RTC
+rtc_mins:      .byte 0          ; Minutes from the RTC
+rtc_hrs:       .byte 0          ; Hours from the RTC
 i2c_addr:       .byte   0                ; I2C peripheral address for generic read/write
 i2c_reg:        .byte   0                ; I2C peripheral register address for generic read/write
 rx_byte_count:  .byte   0                ; Number of bytes to read from slave
@@ -53,6 +56,7 @@ I2C_DIR .equ P3DIR
 RTC_WR  .equ 0DEh      ; RTC Addr 0x6F | WR (0)
 RTC_RD  .equ 0DFh      ; RTC Addr 0x6F | RD (1)
 RTC_OSC_EN  .equ 080h  ; RTC oscillator enable bit in seconds reg
+RTC_24HR_EN .equ 040h  ; RTC 24 hour enable bit in hours reg
 RTC_SEC_REG .equ 00h   ; RTC seconds register
 RTC_MIN_REG .equ 01h   ; RTC minutes register
 RTC_HR_REG  .equ 02h   ; RTC hours register
@@ -107,17 +111,35 @@ init:
             bis.w #GIE, SR                  ; Enable global interrupts
             nop
 
-            ; Init the RTC by setting the oscillator enable
-            ; bit in the seconds register
+            ; -- Init the RTC --
             mov.b #RTC_SEC_REG, &i2c_reg
-            mov.b #RTC_OSC_EN, &rtc_tx_data 
-            call #rtc_write_register        
+            mov.b #RTC_OSC_EN, &rtc_tx_data     ; Enable the oscillator (seconds register)
+            call #rtc_write_register       
+
+            mov.b #RTC_HR_REG, &i2c_reg
+            mov.b #RTC_24HR_EN, &rtc_tx_data    ; Enable 24 Hr time (hours register)
+            call #rtc_write_register
 
 main:
 
+            ; Read seconds from RTC and save data
             mov.b #RTC_SEC_REG, &i2c_reg    
             call #rtc_read_register
+            bic.b #BIT7, &rx_byte               ; 8th bit of seconds register is a status flag
+            mov.b &rx_byte, &rtc_secs
             
+            ; Read minutes from RTC and save data
+            mov.b #RTC_MIN_REG, &i2c_reg    
+            call #rtc_read_register
+            bic.b #BIT7, &rx_byte               ; 8th bit of minutes register is unused
+            mov.b &rx_byte, &rtc_mins
+
+            ; Read hours from RTC and save data
+            mov.b #RTC_HR_REG, &i2c_reg    
+            call #rtc_read_register
+            and.b #03Fh, &rx_byte               ; 7th & 6th bits of hours register are unused and a flag
+            mov.b &rx_byte, &rtc_hrs
+
             ; Potentially f*ck yo shi program flow (generic read routine)
             ;mov.b #32, &rx_byte_count           ; change this based on how many bytes you want to start to receive,
             ;inc.b &rx_byte_count                ; now lets say you really wanna brick yo shit, just uncomment this, comment the above line and it will run forever :)

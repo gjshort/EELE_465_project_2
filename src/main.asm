@@ -27,7 +27,6 @@
 tx_byte:    .byte  0            ; Byte destined for i2c transmit is stored  
 rx_byte:    .byte  0            ; Byte from an i2c receive
 i2c_ack:    .byte  0            ; I2C ACK and NACK
-rtc_reg:    .byte  0            ; Register pointer for RTC
 rtc_tx_data:   .byte 0          ; Data to be sent to the RTC
 i2c_addr:       .byte   0                ; I2C peripheral address for generic read/write
 i2c_reg:        .byte   0                ; I2C peripheral register address for generic read/write
@@ -110,14 +109,14 @@ init:
 
             ; Init the RTC by setting the oscillator enable
             ; bit in the seconds register
-            mov.b #RTC_SEC_REG, &rtc_reg
+            mov.b #RTC_SEC_REG, &i2c_reg
             mov.b #RTC_OSC_EN, &rtc_tx_data 
             call #rtc_write_register        
 
 main:
 
-            ;mov.b #RTC_SEC_REG, &rtc_reg    
-            ;call #rtc_read_register
+            mov.b #RTC_SEC_REG, &i2c_reg    
+            call #rtc_read_register
             
             ; Potentially f*ck yo shi program flow (generic read routine)
             ;mov.b #32, &rx_byte_count           ; change this based on how many bytes you want to start to receive,
@@ -127,9 +126,9 @@ main:
             ;call #i2c_rx_generic                ; go to subroutine to start importing data to memory
 
             ; Send specified number of bytes to slave (generix write routine)
-            mov.w #10d, &tx_byte_count          ; declare how many bytes to write
-            mov.w #2045h, R13                   ; declare where 1st byte in memory is, move to R13 for pointer
-            call #i2c_tx_generic
+            ;mov.w #10d, &tx_byte_count          ; declare how many bytes to write
+            ;mov.w #2045h, R13                   ; declare where 1st byte in memory is, move to R13 for pointer
+            ;call #i2c_tx_generic
 
             call #delay_50ms
             
@@ -165,7 +164,7 @@ delay_12us:
 
 ; -- rtc_write_register --
 ; Writes the data stored in 'rtc_tx_data' to the
-; RTC register specified in 'rtc_reg'. These locations
+; RTC register specified in 'i2c_reg'. These locations
 ; must be updated prior to calling this function.
 rtc_write_register:
 
@@ -179,7 +178,7 @@ rtc_write_register:
         jnz exit_rtc_write              ; Exit if NACK           
 
         ; Set RTC register pointer
-        mov.b &rtc_reg, &tx_byte        ; Writing to seconds register
+        mov.b &i2c_reg, &tx_byte        ; Writing to seconds register
         call #i2c_tx_byte
         call #i2c_rx_ack   
         cmp.b #0, &i2c_ack              ; Check ACK/NACK
@@ -197,9 +196,12 @@ exit_rtc_write
         ret
 
 ; -- RTC Read Register --
-; Reads the register specified in 'rtc_reg'.
+; Reads the register specified in 'i2c_reg'.
 ; The user must write to that location before calling this.
 rtc_read_register:
+
+        push    R12                             ; save R12 data
+        mov.w   #rx_read_space, R12             ; put the first word in memory value reserved to read bytes in R12
 
         call #i2c_start
 
@@ -211,7 +213,7 @@ rtc_read_register:
         jnz exit_rtc_read               ; Exit if NACK           
 
         ; Set RTC register pointer
-        mov.b &rtc_reg, &tx_byte        ; Writing to seconds reg.
+        mov.b &i2c_reg, &tx_byte        ; Writing to seconds reg.
         call #i2c_tx_byte
         call #i2c_rx_ack   
         cmp.b #0, &i2c_ack              ; Check ACK/NACK
@@ -234,6 +236,7 @@ rtc_read_register:
 exit_rtc_read
 
         call #i2c_stp
+        pop     R12                             ; restore R12
 
         ret
 

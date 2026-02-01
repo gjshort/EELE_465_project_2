@@ -21,15 +21,19 @@
 ; Data Allocation
 ;--------------------------------------------------------------------------------
 
-            .data                         ; go to data memory (2000h)
-            .retain                       ; keep this section, even if not used
+            .data                       ; go to data memory (2000h)
+            .retain                     ; keep this section, even if not used
 
 tx_byte:    .byte  0            ; Byte destined for i2c transmit is stored  
 rx_byte:    .byte  0            ; Byte from an i2c receive
 i2c_ack:    .byte  0            ; I2C ACK and NACK
 rtc_reg:    .byte  0            ; Register pointer for RTC
 rtc_tx_data:   .byte 0          ; Data to be sent to the RTC
-rx_byte_count: .byte 0          ; Number of bytes to read from slave
+i2c_addr:       .byte   0                ; I2C peripheral address for generic read/write
+i2c_reg:        .byte   0                ; I2C peripheral register address for generic read/write
+rx_byte_count:  .byte   0                ; Number of bytes to read from slave
+tx_byte_count:  .byte   0
+rx_read_space:  .space 32               ; Space allocated for bytes to be stored
 
             ; Ensure current section gets linked
             .retain
@@ -112,8 +116,20 @@ init:
 
 main:
 
-            mov.b #RTC_SEC_REG, &rtc_reg    
-            call #rtc_read_register
+            ;mov.b #RTC_SEC_REG, &rtc_reg    
+            ;call #rtc_read_register
+            
+            ; Potentially f*ck yo shi program flow (generic read routine)
+            ;mov.b #32, &rx_byte_count           ; change this based on how many bytes you want to start to receive,
+            ;inc.b &rx_byte_count                ; now lets say you really wanna brick yo shit, just uncomment this, comment the above line and it will run forever :)
+            ;mov.b #034h, &i2c_addr
+            ;mov.b #00h, &i2c_reg
+            ;call #i2c_rx_generic                ; go to subroutine to start importing data to memory
+
+            ; Send specified number of bytes to slave (generix write routine)
+            mov.w #10d, &tx_byte_count          ; declare how many bytes to write
+            mov.w #2045h, R13                   ; declare where 1st byte in memory is, move to R13 for pointer
+            call #i2c_tx_generic
 
             call #delay_50ms
             
@@ -395,9 +411,9 @@ i2c_tx_Nbytes:
     call #i2c_start
 
     ; Transmits 1st byte, send ack, then send repeated start
-    mov.b   #68h, &tx_byte
+    mov.b   #69h, &tx_byte
     call    #i2c_tx_byte
-    call    #i2c_rx_ack               ; Okay so we did need NACK, maybe? My thought was to froce a nack so it can send a repeat start condition for next byte.
+    call    #i2c_rx_ack               
 
     ; Transmits 2nd byte, ..^
     mov.b   #67h, &tx_byte
@@ -446,8 +462,10 @@ exit_i2c_tx_count
 
 
 ;-- i2c_rx_byte --
-; This subroutine will receive a byte from the AD2 after we 
-; have A:READY sent a read request.
+; This subroutine will receive a byte from a slave
+; and storing the first byte at 'rx_read_space'. 
+; Any subsequent bytes received during a multi-byte
+; read will be stored sequentially afterwards.
 i2c_rx_byte:
 
         push    R7
@@ -487,31 +505,39 @@ end_store
 end_receive
 
         mov.b R7, &rx_byte              ; Save receieved byte
-        mov.w #8d, R15                ; Reset Tx/Rx counter
-        pop   R7                      ; Restore R7
+        mov.b &rx_byte, 0(R12)          ; Take saved byte send to location in memory
+        inc.w R12                       ; Point R12 to next spot in memory
+        mov.w #8d, R15                  ; Reset Tx/Rx counter
+        pop   R7                        ; Restore R7
         ret
 
 
 ; -- i2c_rx_Nbytes --
 ; Reads the # of bytes specified in rx_byte_count from a slave
-; The value is constantly overwritten in rx_byte for now.
+; The values are sequentially stored starting at 'rx_read_space'.
 i2c_rx_Nbytes:
 
         push R8
+        push R9
         mov.w #0, R8
         mov.b &rx_byte_count, R8                ; Number of sequential bytes to read
+        
+        mov.w #0h, R9
+        mov.b &i2c_addr, R9                     ; Copy address of slave to R9
+        rla R9                                  ; Prepare address for addition of R/W bit
 
         call    #i2c_start                      ; Send START from master
 
         ; Tx Address and specify a write
-        mov.b   #0DEh, &tx_byte                  ; Slave addr 0x34 | Write
+        bic.b   #BIT0, R9                       ; Set last address bit to WR
+        mov.b   R9, &tx_byte                    ; Slave address to tx buffer
         call    #i2c_tx_byte                    ; Transmit slave address
         call    #i2c_rx_ack                     ; Let slave send ack signal
         cmp.b #0, &i2c_ack                      ; Check ACK/NACK
         jnz exit_rx_Nbytes                      ; Exit if NACK
 
         ; Tx Slave register pointer
-        mov.b   #0h, &tx_byte                   ; Set slave register pointer to 0
+        mov.b   &i2c_reg, &tx_byte                   ; Set slave register pointer to 0
         call    #i2c_tx_byte                    ; Transmit register address
         call    #i2c_rx_ack                     ; Let slave send ack signal
         cmp.b #0, &i2c_ack                      ; Check ACK/NACK
@@ -521,7 +547,8 @@ i2c_rx_Nbytes:
         call    #i2c_repeated_start             ; Switch from WR to RD
 
         ; Tx Address and specify a read
-        mov.b   #0DFh, &tx_byte                  ; Slave addr 0x34 | Read
+        bis.b   #BIT0, R9                       ; Set last address but to RD
+        mov.b   R9, &tx_byte                    ; Slave address to tx buffer
         call    #i2c_tx_byte                    ; Transmit slave adress
         call    #i2c_rx_ack                     ; Let slave send ack signal
         cmp.b #0, &i2c_ack                      ; Check ACK/NACK
@@ -543,8 +570,60 @@ done_receiving_bytes
 exit_rx_Nbytes
 
         call    #i2c_stp                        ; End transmission
+        pop R9
         pop R8
         ret
+
+;----------------------------------------------------------------------
+; Generic Subroutines for Mastery
+;----------------------------------------------------------------------
+
+;-- Generic Rx Routine --
+; This will handle arbitrary byte read and storage.
+; User must specify the slave address in 'i2c_addr' and
+; the register pointer in 'i2c_reg' before calling
+; this function
+i2c_rx_generic:
+
+        ; Init
+        push    R12                             ; save R12 data
+        mov.w   #rx_read_space, R12             ; put the first word in memory value reserved to read bytes in R12
+
+        ; Call i2c_rx_byte to read and store bytes in memory
+        call    #i2c_rx_Nbytes
+
+        ; Return to main
+        pop     R12                             ; restore R12
+        ret
+
+;-- Generic Tx Routine --
+; This will handle abritrary write to slave, msut specify how many bytes to send and where first byte is located in memory
+; before calling
+i2c_tx_generic:
+
+        mov.w   tx_byte_count, R14
+
+continue_tx_generic
+        mov.b   @R13+, &tx_byte                ; move byte to be sent
+        
+        ;bit.b   #0d,   R14                      ; see if we transmitted all the bytes
+        ;jnz     exit_tx_generic                 ; if so exit
+
+        call    #i2c_start                      ; start transaction
+        call    #i2c_tx_byte                    ; send byte
+        call    #i2c_rx_ack                     ; let slave ack received byte
+        ;call    #i2c_stp                        ; send stop
+
+        dec     R14                             ; decrement tx_byte_count by 1
+        jz      exit_tx_generic                 ; if R14 == 0 leave routine
+        jmp     continue_tx_generic             ; start next byte transmit
+exit_tx_generic
+        mov.b   tx_byte_count, R14
+        call    #i2c_stp                        ; send stop
+        
+        ret                                     ; go back to main
+
+;---------------- END GENERIC SUBROUTINES -----------------------------
 
 ; --- Timer B0 ISR ---
 ; This creates a heartbeat LED

@@ -24,9 +24,13 @@
             .data                       ; go to data memory (2000h)
             .retain                     ; keep this section, even if not used
 
-tx_byte:        .byte   0                ; Byte destined for i2c transmit is stored 
-rx_byte:        .byte   0                ; Byte from an i2c receive
-i2c_ack:        .byte   0                ; I2C ACK and NACK
+tx_byte:    .byte  0            ; Byte destined for i2c transmit is stored  
+rx_byte:    .byte  0            ; Byte from an i2c receive
+i2c_ack:    .byte  0            ; I2C ACK and NACK
+rtc_tx_data:   .byte 0          ; Data to be sent to the RTC
+rtc_secs:      .byte 0          ; Seconds from the RTC
+rtc_mins:      .byte 0          ; Minutes from the RTC
+rtc_hrs:       .byte 0          ; Hours from the RTC
 i2c_addr:       .byte   0                ; I2C peripheral address for generic read/write
 i2c_reg:        .byte   0                ; I2C peripheral register address for generic read/write
 rx_byte_count:  .byte   0                ; Number of bytes to read from slave
@@ -46,10 +50,18 @@ RESET       mov.w   #__STACK_END,SP
 ; Macros
 ;-------------------------------------------------------------------------------
 
-SDA_PIN         .equ BIT0
-SCL_PIN         .equ BIT2
-I2C_DIR         .equ P3DIR
-MSB_MASK        .equ 0x80
+SDA_PIN .equ BIT0
+SCL_PIN .equ BIT2
+I2C_DIR .equ P3DIR
+RTC_WR  .equ 0DEh      ; RTC Addr 0x6F | WR (0)
+RTC_RD  .equ 0DFh      ; RTC Addr 0x6F | RD (1)
+RTC_OSC_EN  .equ 080h  ; RTC oscillator enable bit in seconds reg
+RTC_24HR_EN .equ 040h  ; RTC 24 hour enable bit in hours reg
+RTC_SEC_REG .equ 00h   ; RTC seconds register
+RTC_MIN_REG .equ 01h   ; RTC minutes register
+RTC_HR_REG  .equ 02h   ; RTC hours register
+
+MSB_MASK .equ 0x80
 
 
 init:
@@ -99,7 +111,42 @@ init:
             bis.w #GIE, SR                  ; Enable global interrupts
             nop
 
+            ; -- Init the RTC --
+
+            ; Hrs reg: 10, 24 hr time
+            mov.b #RTC_HR_REG, &i2c_reg
+            mov.b #010h, &rtc_tx_data           
+            call #rtc_write_register
+
+            ; Mins reg: 00
+            mov.b #RTC_MIN_REG, &i2c_reg
+            mov.b #00h, &rtc_tx_data           
+            call #rtc_write_register
+            
+            ; Secs reg: 00, oscilattor enable
+            mov.b #RTC_SEC_REG, &i2c_reg
+            mov.b #RTC_OSC_EN, &rtc_tx_data     ; Enable the oscillator (seconds register)
+            call #rtc_write_register       
+
 main:
+
+            ; Read seconds from RTC and save data
+            mov.b #RTC_SEC_REG, &i2c_reg    
+            call #rtc_read_register
+            bic.b #BIT7, &rx_byte               ; 8th bit of seconds register is a status flag
+            mov.b &rx_byte, &rtc_secs
+            
+            ; Read minutes from RTC and save data
+            mov.b #RTC_MIN_REG, &i2c_reg    
+            call #rtc_read_register
+            bic.b #BIT7, &rx_byte               ; 8th bit of minutes register is unused
+            mov.b &rx_byte, &rtc_mins
+
+            ; Read hours from RTC and save data
+            mov.b #RTC_HR_REG, &i2c_reg    
+            call #rtc_read_register
+            and.b #03Fh, &rx_byte               ; 7th & 6th bits of hours register are unused and a flag
+            mov.b &rx_byte, &rtc_hrs
 
             ; Potentially f*ck yo shi program flow (generic read routine)
             ;mov.b #32, &rx_byte_count           ; change this based on how many bytes you want to start to receive,
@@ -109,9 +156,9 @@ main:
             ;call #i2c_rx_generic                ; go to subroutine to start importing data to memory
 
             ; Send specified number of bytes to slave (generix write routine)
-            mov.w #10d, &tx_byte_count          ; declare how many bytes to write
-            mov.w #2045h, R13                   ; declare where 1st byte in memory is, move to R13 for pointer
-            call #i2c_tx_generic
+            ;mov.w #10d, &tx_byte_count          ; declare how many bytes to write
+            ;mov.w #2045h, R13                   ; declare where 1st byte in memory is, move to R13 for pointer
+            ;call #i2c_tx_generic
 
             call #delay_50ms
             
@@ -144,6 +191,84 @@ delay_50ms_loop
 ; GPIO pins is roughly 12 us.
 delay_12us:
             ret
+
+; -- rtc_write_register --
+; Writes the data stored in 'rtc_tx_data' to the
+; RTC register specified in 'i2c_reg'. These locations
+; must be updated prior to calling this function.
+rtc_write_register:
+
+        call #i2c_start
+
+        ; Send RTC Address with write bit
+        mov.b #RTC_WR, &tx_byte
+        call #i2c_tx_byte
+        call #i2c_rx_ack   
+        cmp.b #0, &i2c_ack              ; Check ACK/NACK
+        jnz exit_rtc_write              ; Exit if NACK           
+
+        ; Set RTC register pointer
+        mov.b &i2c_reg, &tx_byte        ; Writing to seconds register
+        call #i2c_tx_byte
+        call #i2c_rx_ack   
+        cmp.b #0, &i2c_ack              ; Check ACK/NACK
+        jnz exit_rtc_write              ; Exit if NACK                
+
+        ; Write to RTC seconds register
+        mov.b &rtc_tx_data, &tx_byte    ; Pack Tx buffer with data
+        call #i2c_tx_byte
+        call #i2c_rx_ack
+        
+exit_rtc_write
+
+        call #i2c_stp
+
+        ret
+
+; -- RTC Read Register --
+; Reads the register specified in 'i2c_reg'.
+; The user must write to that location before calling this.
+rtc_read_register:
+
+        push    R12                             ; save R12 data
+        mov.w   #rx_read_space, R12             ; put the first word in memory value reserved to read bytes in R12
+
+        call #i2c_start
+
+        ; Send RTC Address with write bit
+        mov.b #RTC_WR, &tx_byte
+        call #i2c_tx_byte
+        call #i2c_rx_ack   
+        cmp.b #0, &i2c_ack              ; Check ACK/NACK
+        jnz exit_rtc_read               ; Exit if NACK           
+
+        ; Set RTC register pointer
+        mov.b &i2c_reg, &tx_byte        ; Writing to seconds reg.
+        call #i2c_tx_byte
+        call #i2c_rx_ack   
+        cmp.b #0, &i2c_ack              ; Check ACK/NACK
+        jnz exit_rtc_read               ; Exit if NACK                
+
+        ; Start & stop before switching to reading
+        call #i2c_repeated_start        ; Switch from WR to RD
+
+        ; Tx Address and specify a read
+        mov.b #RTC_RD, &tx_byte                 
+        call #i2c_tx_byte                       
+        call #i2c_rx_ack                        
+        cmp.b #0, &i2c_ack              ; Check ACK/NACK
+        jnz exit_rtc_read               ; Exit if NACK
+
+        ; Read from RTC and end transmission
+        call #i2c_rx_byte               ; Receive byte (stored in rx_byte)
+        call #i2c_tx_nack               ; Stop asking for data
+      
+exit_rtc_read
+
+        call #i2c_stp
+        pop     R12                             ; restore R12
+
+        ret
 
 ; -- I2C Start --
 ; Generates the start condition for I2C

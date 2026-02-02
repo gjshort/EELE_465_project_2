@@ -130,11 +130,11 @@ init:
 
 main:
 
-            ; Read seconds from RTC and save data
-            mov.b #RTC_SEC_REG, &i2c_reg    
+            ; Read hours from RTC and save data
+            mov.b #RTC_HR_REG, &i2c_reg    
             call #rtc_read_register
-            bic.b #BIT7, &rx_byte               ; 8th bit of seconds register is a status flag
-            mov.b &rx_byte, &rtc_secs
+            and.b #03Fh, &rx_byte               ; 7th & 6th bits of hours register are unused and a flag
+            mov.b &rx_byte, &rtc_hrs
             
             ; Read minutes from RTC and save data
             mov.b #RTC_MIN_REG, &i2c_reg    
@@ -142,11 +142,11 @@ main:
             bic.b #BIT7, &rx_byte               ; 8th bit of minutes register is unused
             mov.b &rx_byte, &rtc_mins
 
-            ; Read hours from RTC and save data
-            mov.b #RTC_HR_REG, &i2c_reg    
+            ; Read seconds from RTC and save data
+            mov.b #RTC_SEC_REG, &i2c_reg    
             call #rtc_read_register
-            and.b #03Fh, &rx_byte               ; 7th & 6th bits of hours register are unused and a flag
-            mov.b &rx_byte, &rtc_hrs
+            bic.b #BIT7, &rx_byte               ; 8th bit of seconds register is a status flag
+            mov.b &rx_byte, &rtc_secs
 
             ; Potentially f*ck yo shi program flow (generic read routine)
             ;mov.b #32, &rx_byte_count           ; change this based on how many bytes you want to start to receive,

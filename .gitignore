@@ -42,6 +42,8 @@
 *.idb
 *.pdb
 
+# Draw.io backups
+*.bkp
 
 # Code Composer Studio files
 # https://software-dl.ti.com/ccs/esd/documents/users_guide/ccs_project-management2.html#files-to-check-in

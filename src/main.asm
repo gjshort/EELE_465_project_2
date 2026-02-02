@@ -155,7 +155,7 @@ main:
             ;mov.b #00h, &i2c_reg
             ;call #i2c_rx_generic                ; go to subroutine to start importing data to memory
 
-            ; Send specified number of bytes to slave (generix write routine)
+            ; Send specified number of bytes to slave (generic write routine)
             ;mov.w #10d, &tx_byte_count          ; declare how many bytes to write
             ;mov.w #2045h, R13                   ; declare where 1st byte in memory is, move to R13 for pointer
             ;call #i2c_tx_generic

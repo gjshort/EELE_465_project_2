@@ -1,4 +1,4 @@
-<mxfile host="Electron" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/29.3.6 Chrome/140.0.7339.249 Electron/38.8.0 Safari/537.36" version="29.3.6" pages="5">
+<mxfile host="Electron" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/29.3.0 Chrome/140.0.7339.249 Electron/38.7.2 Safari/537.36" version="29.3.0" pages="6">
   <diagram id="Kcya2C6UL9Ipibv_GPjr" name="top-level">
     <mxGraphModel dx="1194" dy="1640" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
       <root>
@@ -397,6 +397,50 @@
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="W6XreqFMQgXcOcx0kRzT-13" edge="1" parent="1" source="W6XreqFMQgXcOcx0kRzT-4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;entryPerimeter=0;" target="W6XreqFMQgXcOcx0kRzT-5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="jke7soxL5SmIRrvgcSDO" name="i2c_rx_generic">
+    <mxGraphModel dx="1213" dy="770" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="850" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="ynTixC7FrtWxBNP89Oxx-1" parent="1" style="strokeWidth=2;html=1;shape=mxgraph.flowchart.document2;whiteSpace=wrap;size=0.25;fillColor=#d5e8d4;strokeColor=#82b366;verticalAlign=top;" value="&lt;font style=&quot;font-size: 21px; color: rgb(0, 0, 0);&quot;&gt;&lt;b style=&quot;&quot;&gt;Init&lt;/b&gt;&lt;/font&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;&lt;font color=&quot;#000000&quot;&gt;&lt;span style=&quot;font-size: 15px;&quot;&gt;tx_byte: .byte 0&lt;/span&gt;&lt;/font&gt;&lt;/div&gt;&lt;div&gt;&lt;font color=&quot;#000000&quot;&gt;&lt;span style=&quot;font-size: 15px;&quot;&gt;tx_byte_start: .byte 0&lt;/span&gt;&lt;/font&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="120" width="190" x="41" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="ynTixC7FrtWxBNP89Oxx-2" edge="1" parent="1" source="ynTixC7FrtWxBNP89Oxx-3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="ynTixC7FrtWxBNP89Oxx-5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ynTixC7FrtWxBNP89Oxx-3" parent="1" style="strokeWidth=2;html=1;shape=mxgraph.flowchart.terminator;whiteSpace=wrap;fontStyle=1;fontSize=16;fillColor=#ffe6cc;strokeColor=#d79b00;" value="&lt;font style=&quot;color: rgb(0, 0, 0);&quot;&gt;i2c_rx_generic&lt;/font&gt;" vertex="1">
+          <mxGeometry height="90" width="170" x="866" y="55" as="geometry" />
+        </mxCell>
+        <mxCell id="ynTixC7FrtWxBNP89Oxx-4" edge="1" parent="1" source="ynTixC7FrtWxBNP89Oxx-5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="ynTixC7FrtWxBNP89Oxx-6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ynTixC7FrtWxBNP89Oxx-5" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d0cee2;strokeColor=#56517e;" value="&lt;font color=&quot;#000000&quot;&gt;Point to the first byte in memory.&lt;/font&gt;" vertex="1">
+          <mxGeometry height="70" width="180" x="861" y="200" as="geometry" />
+        </mxCell>
+        <mxCell id="ynTixC7FrtWxBNP89Oxx-6" parent="1" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;fixedSize=1;fillColor=#cdeb8b;strokeColor=#36393d;" value="&lt;font style=&quot;color: rgb(0, 0, 0);&quot;&gt;i2c_rx_Nbytes&lt;/font&gt;" vertex="1">
+          <mxGeometry height="70" width="218" x="842" y="320" as="geometry" />
+        </mxCell>
+        <mxCell id="ynTixC7FrtWxBNP89Oxx-7" edge="1" parent="1" source="ynTixC7FrtWxBNP89Oxx-8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="ynTixC7FrtWxBNP89Oxx-10">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ynTixC7FrtWxBNP89Oxx-8" parent="1" style="strokeWidth=2;html=1;shape=mxgraph.flowchart.terminator;whiteSpace=wrap;fontStyle=1;fontSize=16;fillColor=#ffe6cc;strokeColor=#d79b00;" value="&lt;font style=&quot;color: rgb(0, 0, 0);&quot;&gt;main&lt;/font&gt;" vertex="1">
+          <mxGeometry height="90" width="170" x="351" y="55" as="geometry" />
+        </mxCell>
+        <mxCell id="ynTixC7FrtWxBNP89Oxx-9" edge="1" parent="1" source="ynTixC7FrtWxBNP89Oxx-1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;" target="ynTixC7FrtWxBNP89Oxx-8">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ynTixC7FrtWxBNP89Oxx-10" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d0cee2;strokeColor=#56517e;" value="&lt;font color=&quot;#000000&quot;&gt;Declare # of bytes to be read.&lt;/font&gt;&lt;div&gt;&lt;font color=&quot;#000000&quot;&gt;Declare where fist byte is in memory.&lt;/font&gt;&lt;/div&gt;&lt;div&gt;&lt;font color=&quot;#000000&quot;&gt;Declare where to read too.&lt;/font&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="70" width="180" x="631" y="65" as="geometry" />
+        </mxCell>
+        <mxCell id="ynTixC7FrtWxBNP89Oxx-11" edge="1" parent="1" source="ynTixC7FrtWxBNP89Oxx-10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;" target="ynTixC7FrtWxBNP89Oxx-3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ynTixC7FrtWxBNP89Oxx-12" edge="1" parent="1" source="ynTixC7FrtWxBNP89Oxx-6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;entryPerimeter=0;" target="ynTixC7FrtWxBNP89Oxx-8">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
       </root>
